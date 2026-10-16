@@ -1,0 +1,17 @@
+{
+  "name": "starpie-homepage",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The StarPie project homepage — a dependency-free static website.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "start": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test",
+    "check": "node --check scripts/app.js && node --check scripts/preferences.js && node --check scripts/i18n.js && node --check scripts/menu-data.js && node --check scripts/dev.mjs && node --check scripts/build.mjs"
+  }
+}
