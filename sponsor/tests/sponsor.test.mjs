@@ -10,8 +10,8 @@ import { createSponsorServer } from '../server.mjs';
 
 const template = await readFile(new URL('../template.html', import.meta.url), 'utf8');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64');
-const base = () => ({ version: 1, currency: 'CNY', updatedAt: '2026-10-16', donationLinks: [], sponsors: [] });
-const person = (id, amountMinor = 0, extra = {}) => ({ id, name: id, amountMinor, ...extra });
+const base = () => ({ version: 2, updatedAt: '2026-10-16', donationLinks: [], sponsors: [] });
+const person = (id, extra = {}) => ({ id, name: id, ...extra });
 const dataWith = sponsors => validateData({ ...base(), sponsors });
 const idsIn = output => [...output.matchAll(/data-sponsor-id="([a-z0-9-]+)"/g)].map(match => match[1]);
 
@@ -30,24 +30,23 @@ async function fixture(t, raw = base()) {
   return directory;
 }
 
-test('Cumulative amounts sort descending, ties use stable IDs, and input is not mutated', () => {
-  const raw = { ...base(), sponsors: [person('beta', 5000), person('alpha', 5000), person('first', 9000), person('last', 0)] };
+test('Public identifiers sort consistently and input is not mutated', () => {
+  const raw = { ...base(), sponsors: [person('beta'), person('alpha'), person('first'), person('last')] };
   const before = structuredClone(raw);
-  assert.deepEqual(validateData(raw).sponsors.map(entry => entry.id), ['first', 'alpha', 'beta', 'last']);
+  assert.deepEqual(validateData(raw).sponsors.map(entry => entry.id), ['alpha', 'beta', 'first', 'last']);
   assert.deepEqual(raw, before);
   raw.sponsors.reverse();
-  assert.deepEqual(validateData(raw).sponsors.map(entry => entry.id), ['first', 'alpha', 'beta', 'last']);
+  assert.deepEqual(validateData(raw).sponsors.map(entry => entry.id), ['alpha', 'beta', 'first', 'last']);
 });
 
-test('Money rejects floats, negative values, coercion and unsafe integers', () => {
-  for (const value of [-1, 0.1, '500', Number.MAX_SAFE_INTEGER + 1, null, NaN, Infinity]) {
-    assert.throws(() => dataWith([person('one', value)]), /amountMinor/);
+test('Monetary values are rejected from public data even when valid', () => {
+  for (const value of [-1, 0, 5000, 0.1, '500', Number.MAX_SAFE_INTEGER, null, NaN, Infinity]) {
+    assert.throws(() => dataWith([person('one', { amountMinor: value })]), /unknown field amountMinor/);
   }
-  assert.equal(dataWith([person('one', Number.MAX_SAFE_INTEGER)]).sponsors[0].amountMinor, Number.MAX_SAFE_INTEGER);
 });
 
-test('One explicit currency, real date and supported schema version are required', () => {
-  for (const patch of [{ currency: 'cny' }, { currency: 'CNY/USD' }, { currency: null }, { version: 2 }, { updatedAt: '2026-02-29' }, { updatedAt: '2026-13-01' }, { updatedAt: '2026-1-1' }]) {
+test('Private currency is rejected and a real date and v2 schema are required', () => {
+  for (const patch of [{ currency: 'CNY' }, { currency: 'CNY/USD' }, { currency: null }, { version: 1 }, { updatedAt: '2026-02-29' }, { updatedAt: '2026-13-01' }, { updatedAt: '2026-1-1' }]) {
     assert.throws(() => validateData({ ...base(), ...patch }));
   }
   assert.equal(validateData({ ...base(), updatedAt: '2024-02-29' }).updatedAt, '2024-02-29');
@@ -55,36 +54,36 @@ test('One explicit currency, real date and supported schema version are required
 
 test('Duplicate IDs, hidden extra fields and tier configuration are rejected', () => {
   assert.throws(() => dataWith([person('same'), person('same')]), /Duplicate/);
-  assert.throws(() => dataWith([person('ok', 0, { tier: 'gold' })]), /unknown field/);
-  assert.throws(() => dataWith([person('ok', 0, { email: 'private@example.com' })]), /unknown field/);
+  assert.throws(() => dataWith([person('ok', { tier: 'gold' })]), /unknown field/);
+  assert.throws(() => dataWith([person('ok', { email: 'private@example.com' })]), /unknown field/);
   assert.throws(() => validateData({ ...base(), tiers: [] }), /unknown field/);
   assert.throws(() => dataWith([person('../bad')]));
 });
 
 test('Names support Unicode but reject control characters and malformed surrogate data', () => {
-  assert.equal(dataWith([person('unicode', 0, { name: '星盘🌟' })]).sponsors[0].name, '星盘🌟');
+  assert.equal(dataWith([person('unicode', { name: '星盘🌟' })]).sponsors[0].name, '星盘🌟');
   for (const name of ['', ' name', 'name ', 'a\nb', 'a\u0000b', '\ud800', 'x'.repeat(81)]) {
-    assert.throws(() => dataWith([person('bad', 0, { name })]));
+    assert.throws(() => dataWith([person('bad', { name })]));
   }
 });
 
 test('Profile and donation links only accept credential-free HTTPS', () => {
   for (const url of ['javascript:alert(1)', 'data:text/html,test', '//example.com', 'http://example.com', 'https://user:pass@example.com', 'https://example.com/a b', 'https://example.com/\n']) {
-    assert.throws(() => dataWith([person('bad', 0, { url })]));
+    assert.throws(() => dataWith([person('bad', { url })]));
   }
-  assert.equal(dataWith([person('ok', 0, { url: 'https://example.com' })]).sponsors[0].url, 'https://example.com/');
+  assert.equal(dataWith([person('ok', { url: 'https://example.com' })]).sponsors[0].url, 'https://example.com/');
   assert.throws(() => validateData({ ...base(), donationLinks: [{ label: { 'zh-CN': '支持', en: 'Support' }, url: 'javascript:alert(1)' }] }));
 });
 
 test('Avatar inputs cannot be remote URLs, executable SVGs or paths outside avatars', () => {
   for (const avatar of ['https://example.com/a.png', '../a.png', 'avatars/../../a.png', 'avatars\\a.png', 'avatars/a.svg', 'avatars/.a.png', 'avatars/a b.png']) {
-    assert.throws(() => dataWith([person('bad', 0, { avatar })]), /avatar/);
+    assert.throws(() => dataWith([person('bad', { avatar })]), /avatar/);
   }
 });
 
 test('Names, URLs and replacement metacharacters remain inert markup', () => {
   const name = '<script>alert("x")</script> $& $` $\' & 🌟';
-  const data = dataWith([person('literal', 3, { name, url: 'https://example.com/?a=1&b=2' })]);
+  const data = dataWith([person('literal', { name, url: 'https://example.com/?a=1&b=2' })]);
   const html = renderPage(data, template);
   assert.ok(html.includes(escapeMarkup(name)));
   assert.ok(!html.includes('<script>alert'));
@@ -96,14 +95,16 @@ test('Names, URLs and replacement metacharacters remain inert markup', () => {
 });
 
 test('Template-looking names stay literal and repeated avatars have one embedded bitmap', () => {
-  const data = dataWith([person('one', 2, { name: '{{UPDATED_AT}} $&', avatar: 'avatars/shared.png' }), person('two', 1, { avatar: 'avatars/shared.png' })]);
+  const data = dataWith([person('one', { name: '{{UPDATED_AT}} $&', avatar: 'avatars/shared.png' }), person('two', { avatar: 'avatars/shared.png' })]);
   assert.ok(renderPage(data, template).includes('{{UPDATED_AT}} $&amp;'));
   const svg = renderSvg(data.sponsors, new Map([['avatars/shared.png', `data:image/png;base64,${png.toString('base64')}`]]), 'light');
   assert.equal((svg.match(/<image /g) ?? []).length, 1);
   assert.equal((svg.match(/<use /g) ?? []).length, 2);
 });
-test('HTML and both SVG themes use identical ranking without exposing exact amounts', () => {
-  const data = dataWith([person('low', 13579111), person('high', 24680222), person('zero', 0)]);
+test('HTML, public JSON and both SVG themes use the same non-monetary order', () => {
+  const data = dataWith([person('low'), person('high'), person('zero')]);
+  assert.deepEqual(data.sponsors.map(entry => entry.id), ['high', 'low', 'zero']);
+  assert.ok(!JSON.stringify(data).includes('amountMinor'));
   const outputs = [renderPage(data, template), renderSvg(data.sponsors, new Map(), 'light'), renderSvg(data.sponsors, new Map(), 'dark')];
   for (const output of outputs) {
     assert.deepEqual(idsIn(output), ['high', 'low', 'zero']);
@@ -132,7 +133,7 @@ test('Empty output contains no fictitious donors and does not require JavaScript
 });
 
 test('Compact SVG wraps after eight equal-size avatars and preserves complete names in titles', () => {
-  const data = dataWith(Array.from({ length: 9 }, (_, i) => person(`person-${i}`, i, { name: '很长的昵称 With emoji 🌟' })));
+  const data = dataWith(Array.from({ length: 9 }, (_, i) => person(`person-${i}`, { name: '很长的昵称 With emoji 🌟' })));
   const svg = renderSvg(data.sponsors, new Map(), 'light');
   assert.ok(svg.includes('height="268"'));
   assert.equal((svg.match(/r="36"/g) ?? []).length, 9);
@@ -144,7 +145,7 @@ test('Compact SVG wraps after eight equal-size avatars and preserves complete na
 test('Local avatars are verified and embedded into SVG rather than linked remotely', async t => {
   const directory = await fixture(t);
   await writeFile(path.join(directory, 'avatars', 'one.png'), png);
-  const data = dataWith([person('one', 1, { avatar: 'avatars/one.png' })]);
+  const data = dataWith([person('one', { avatar: 'avatars/one.png' })]);
   const images = await loadAvatars(directory, data.sponsors);
   assert.equal(images.size, 1);
   assert.equal(images.get('avatars/one.png'), `data:image/png;base64,${png.toString('base64')}`);
@@ -155,13 +156,13 @@ test('Local avatars are verified and embedded into SVG rather than linked remote
   assert.equal(avatarMediaType(png, '.PNG'), 'image/png');
   assert.throws(() => avatarMediaType(png, '.jpg'));
   await writeFile(path.join(directory, 'avatars', 'bad.png'), '<svg onload="alert(1)"/>');
-  await assert.rejects(loadAvatars(directory, dataWith([person('bad', 0, { avatar: 'avatars/bad.png' })]).sponsors), /signature/);
+  await assert.rejects(loadAvatars(directory, dataWith([person('bad', { avatar: 'avatars/bad.png' })]).sponsors), /signature/);
 });
 
 test('Oversize avatars fail before generating large embedded content', async t => {
   const directory = await fixture(t);
   await writeFile(path.join(directory, 'avatars', 'large.png'), Buffer.alloc(256 * 1024 + 1));
-  await assert.rejects(loadAvatars(directory, dataWith([person('large', 0, { avatar: 'avatars/large.png' })]).sponsors), /256 KiB/);
+  await assert.rejects(loadAvatars(directory, dataWith([person('large', { avatar: 'avatars/large.png' })]).sponsors), /256 KiB/);
 });
 
 test('Missing and unsupported template tokens fail rather than publishing placeholders', () => {
@@ -170,7 +171,7 @@ test('Missing and unsupported template tokens fail rather than publishing placeh
 });
 
 test('Generation is deterministic, --check is read-only and stale results fail', async t => {
-  const directory = await fixture(t, { ...base(), sponsors: [person('test', 5000)] });
+  const directory = await fixture(t, { ...base(), sponsors: [person('test')] });
   assert.deepEqual((await generate(directory)).changed, outputNames);
   assert.deepEqual((await generate(directory)).changed, []);
   assert.deepEqual((await generate(directory, { check: true })).changed, []);
@@ -184,7 +185,7 @@ test('Invalid data does not partially overwrite generated output', async t => {
   const directory = await fixture(t);
   await generate(directory);
   const before = await Promise.all(outputNames.map(name => readFile(path.join(directory, name), 'utf8')));
-  await writeFile(path.join(directory, 'data.json'), JSON.stringify({ ...base(), sponsors: [person('bad', 0.1)] }));
+  await writeFile(path.join(directory, 'data.json'), JSON.stringify({ ...base(), sponsors: [person('bad', { amountMinor: 0.1 })] }));
   await assert.rejects(generate(directory), /amountMinor/);
   assert.deepEqual(await Promise.all(outputNames.map(name => readFile(path.join(directory, name), 'utf8'))), before);
 });
@@ -194,7 +195,7 @@ test('Avatar symbolic links cannot expose files outside the public avatar direct
   await writeFile(path.join(directory, 'private.png'), png);
   try { await symlink(path.join(directory, 'private.png'), path.join(directory, 'avatars', 'linked.png'), 'file'); }
   catch (error) { if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) return t.skip('This host does not allow test symlinks'); throw error; }
-  await assert.rejects(loadAvatars(directory, dataWith([person('linked', 0, { avatar: 'avatars/linked.png' })]).sponsors), /regular local file/);
+  await assert.rejects(loadAvatars(directory, dataWith([person('linked', { avatar: 'avatars/linked.png' })]).sponsors), /regular local file/);
 });
 
 test('Preview server serves only public files with correct types, redirects and safe methods', async t => {

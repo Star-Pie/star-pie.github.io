@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, mkdtemp, rm, cp, readdir, symlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp, rm, cp, readdir, symlink, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { buildSite } from '../scripts/build.mjs';
@@ -9,7 +9,7 @@ import { generate } from '../sponsor/generate.mjs';
 const mainFiles = ['index.html', '.nojekyll', 'styles/main.css', 'scripts/app.js', 'scripts/preferences.js', 'scripts/i18n.js', 'scripts/menu-data.js'];
 const sponsorFiles = ['index.html', 'styles.css', 'preferences.js', 'app.js', 'logo.webp', 'data.json', 'sponsors-light.svg', 'sponsors-dark.svg'];
 const homepage = '<!doctype html><html lang="en"><title>Homepage fixture</title><h1>Homepage remains intact</h1></html>\n';
-const baseData = () => ({ version: 1, currency: 'CNY', updatedAt: '2026-10-16', donationLinks: [], sponsors: [] });
+const baseData = () => ({ version: 2, updatedAt: '2026-10-16', donationLinks: [], sponsors: [] });
 const idsIn = output => [...output.matchAll(/data-sponsor-id="([a-z0-9-]+)"/g)].map(match => match[1]);
 
 async function fixture(t, data = baseData()) {
@@ -26,7 +26,7 @@ async function fixture(t, data = baseData()) {
   }
   await mkdir(path.join(root, 'assets'));
   await writeFile(path.join(root, 'assets', 'keep.webp'), 'fixture asset');
-  await cp(new URL('../sponsor/', import.meta.url), path.join(root, 'sponsor'), { recursive: true });
+  await cp(new URL('../sponsor/', import.meta.url), path.join(root, 'sponsor'), { recursive: true, filter: source => !source.split(path.sep).includes('payment-codes') });
   await writeFile(path.join(root, 'sponsor', 'data.json'), JSON.stringify(data));
   return root;
 }
@@ -41,12 +41,12 @@ async function filesWithin(root, relative = '') {
   return files.sort();
 }
 
-test('One Pages build contains the unchanged homepage and freshly generated ranked sponsor page', async t => {
-  const data = { ...baseData(), sponsors: [{ id: 'smaller', name: 'Smaller donation', amountMinor: 12345 }, { id: 'larger', name: 'Larger donation', amountMinor: 67890 }] };
+test('One Pages build contains the unchanged homepage and freshly generated privacy-preserving sponsor page', async t => {
+  const data = { ...baseData(), sponsors: [{ id: 'smaller', name: 'Smaller public ID' }, { id: 'larger', name: 'Larger public ID' }] };
   const root = await fixture(t, data);
   const result = await buildSite(root);
   const output = path.join(root, 'dist');
-  assert.equal(result.output, output);
+  assert.equal(await realpath(result.output), await realpath(output));
   assert.equal(await readFile(path.join(output, 'index.html'), 'utf8'), homepage);
   assert.equal(await readFile(path.join(root, 'index.html'), 'utf8'), homepage);
   assert.equal(await readFile(path.join(output, 'assets', 'keep.webp'), 'utf8'), 'fixture asset');
@@ -57,7 +57,8 @@ test('One Pages build contains the unchanged homepage and freshly generated rank
   }
   const publishedData = JSON.parse(await readFile(path.join(output, 'sponsor', 'data.json'), 'utf8'));
   assert.deepEqual(publishedData.sponsors.map(sponsor => sponsor.id), ['larger', 'smaller']);
-  assert.equal(publishedData.sponsors[0].amountMinor, 67890);
+  assert.ok(publishedData.sponsors.every(entry => !('amountMinor' in entry)));
+  assert.ok(!JSON.stringify(publishedData).includes('currency'));
   await generate(path.join(root, 'sponsor'), { check: true });
   const manifest = JSON.parse(await readFile(path.join(output, 'build-info.json'), 'utf8'));
   assert.deepEqual(manifest.files, result.files);
@@ -65,7 +66,7 @@ test('One Pages build contains the unchanged homepage and freshly generated rank
 });
 
 test('Publication allowlist excludes source, tests, templates and unreferenced avatar files', async t => {
-  const data = { ...baseData(), sponsors: [{ id: 'one', name: 'One', amountMinor: 100, avatar: 'avatars/shared.webp' }, { id: 'two', name: 'Two', amountMinor: 50, avatar: 'avatars/shared.webp' }] };
+  const data = { ...baseData(), sponsors: [{ id: 'one', name: 'One', avatar: 'avatars/shared.webp' }, { id: 'two', name: 'Two', avatar: 'avatars/shared.webp' }] };
   const root = await fixture(t, data);
   await cp(path.join(root, 'sponsor', 'logo.webp'), path.join(root, 'sponsor', 'avatars', 'shared.webp'));
   await writeFile(path.join(root, 'sponsor', 'avatars', 'not-public.png'), 'Unreferenced private fixture');
@@ -78,7 +79,7 @@ test('Publication allowlist excludes source, tests, templates and unreferenced a
 });
 
 test('Rebuilding removes retired avatars and stale sponsor artifacts without deleting homepage output', async t => {
-  const data = { ...baseData(), sponsors: [{ id: 'retiring', name: 'Retiring fixture', amountMinor: 100, avatar: 'avatars/retiring.webp' }] };
+  const data = { ...baseData(), sponsors: [{ id: 'retiring', name: 'Retiring fixture', avatar: 'avatars/retiring.webp' }] };
   const root = await fixture(t, data);
   await cp(path.join(root, 'sponsor', 'logo.webp'), path.join(root, 'sponsor', 'avatars', 'retiring.webp'));
   await buildSite(root);
@@ -139,4 +140,26 @@ test('A redirected dist directory is rejected before copying publication files',
   catch (error) { if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) return t.skip('This host does not allow test directory links'); throw error; }
   await assert.rejects(buildSite(root), /regular directory|symbolic link|output/i);
   assert.deepEqual(await filesWithin(outside), ['keep.txt']);
+});
+
+test('Build publishes only configured QR codes and removes a code after it is disabled', async t => {
+  const data = { ...baseData(), qrMethods: [
+    { id: 'wechat', label: { 'zh-CN': '微信', en: 'WeChat' }, image: 'payment-codes/wechat.png' },
+    { id: 'alipay', label: { 'zh-CN': '支付宝', en: 'Alipay' }, image: null }
+  ] };
+  const root = await fixture(t, data);
+  const folder = path.join(root, 'sponsor', 'payment-codes'); await mkdir(folder);
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64');
+  await writeFile(path.join(folder, 'wechat.png'), png);
+  await writeFile(path.join(folder, 'alipay.png'), 'unreferenced private fixture');
+  await buildSite(root);
+  const files = await filesWithin(path.join(root, 'dist', 'sponsor'));
+  assert.ok(files.includes('payment-codes/wechat.png'));
+  assert.ok(!files.includes('payment-codes/alipay.png'));
+  assert.deepEqual(await readFile(path.join(root, 'dist', 'sponsor', 'payment-codes', 'wechat.png')), png);
+  data.qrMethods[0].image = null;
+  await writeFile(path.join(root, 'sponsor', 'data.json'), JSON.stringify(data));
+  await buildSite(root);
+  assert.ok(!(await filesWithin(path.join(root, 'dist', 'sponsor'))).some(name => name.startsWith('payment-codes/')));
+  assert.equal(await readFile(path.join(root, 'dist', 'index.html'), 'utf8'), homepage);
 });

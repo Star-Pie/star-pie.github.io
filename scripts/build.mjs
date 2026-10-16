@@ -38,7 +38,8 @@ export async function buildSite(sourceRoot = projectRoot) {
   // Generate before touching the publication candidate. Invalid data must fail the entire build.
   const { data } = await generate(sponsorRoot);
   const avatars = Array.from(new Set(data.sponsors.map(sponsor => sponsor.avatar).filter(Boolean))).sort();
-  const sponsorFiles = sponsorRuntimeFiles.concat(avatars);
+  const paymentCodes = data.qrMethods.map(method => method.image).filter(Boolean);
+  const sponsorFiles = sponsorRuntimeFiles.concat(avatars, paymentCodes);
   for (const file of sponsorFiles) {
     const info = await lstat(path.join(sponsorRoot, ...file.split('/')));
     if (!info.isFile() || info.isSymbolicLink()) throw new Error(`Sponsor publication input must be a regular file: ${file}`);

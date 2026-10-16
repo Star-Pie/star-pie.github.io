@@ -16,6 +16,7 @@
     const dark = root.dataset.theme === 'dark';
     document.title = english ? 'Thank you for your support · StarPie' : '感谢每一份支持 · StarPie';
     navigation.setAttribute('aria-label', english ? 'Page navigation' : '页面导航');
+    document.querySelector('.donation-links')?.setAttribute('aria-label', english ? 'Choose a support method' : '选择支持方式');
     languageButton.textContent = english ? '简体中文' : 'English';
     languageButton.setAttribute('aria-label', english ? '切换到简体中文' : 'Switch to English');
     const label = english ? `Switch to ${dark ? 'light' : 'dark'} theme` : `切换到${dark ? '浅' : '深'}色主题`;

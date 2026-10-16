@@ -1,7 +1,33 @@
 {
-  "version": 1,
-  "currency": "CNY",
+  "version": 2,
   "updatedAt": "2026-10-16",
-  "donationLinks": [],
-  "sponsors": []
+  "donationLinks": [
+    {
+      "label": {
+        "zh-CN": "在爱发电支持",
+        "en": "Support on Afdian"
+      },
+      "url": "https://afdian.com/a/starpieproject"
+    }
+  ],
+  "qrMethods": [
+    {
+      "id": "wechat",
+      "label": {
+        "zh-CN": "微信赞赏码",
+        "en": "WeChat"
+      },
+      "image": "payment-codes/wechat.png"
+    },
+    {
+      "id": "alipay",
+      "label": {
+        "zh-CN": "支付宝扫码",
+        "en": "Alipay"
+      },
+      "image": "payment-codes/alipay.png"
+    }
+  ],
+  "sponsors": [],
+  "contactEmail": "erisnebula09@gmail.com"
 }

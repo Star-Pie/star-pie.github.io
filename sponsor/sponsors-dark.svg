@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="832" height="180" viewBox="0 0 832 180" role="img" aria-labelledby="list-title list-desc">
 <title id="list-title">StarPie supporters</title>
-<desc id="list-desc">Thank you to everyone supporting StarPie. Ordered by cumulative donations; all supporters use the same presentation.</desc>
+<desc id="list-desc">Thank you to everyone supporting StarPie. Stable public identifier order; all supporters use the same presentation.</desc>
 <rect x="1" y="1" width="830" height="178" rx="18" fill="#171b2d"/>
 <path d="M416 28l7 17 17 7-17 7-7 17-7-17-17-7 17-7z" fill="#b6a9ff"/>
 <g font-family="system-ui, sans-serif" text-anchor="middle"><text x="416" y="112" font-size="21" fill="#f2f3ff">Thank you for supporting StarPie.</text><text x="416" y="141" font-size="14" fill="#a7afc8">Our public supporter list will appear here.</text></g>

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const workflow = await readFile(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8');
+const workflow = (await readFile(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const build = workflow.slice(workflow.indexOf('  build:'), workflow.indexOf('  deploy:'));
 const deploy = workflow.slice(workflow.indexOf('  deploy:'));
 const guard = "github.event_name != 'pull_request' && github.ref == 'refs/heads/main'";

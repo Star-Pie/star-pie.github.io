@@ -27,7 +27,7 @@ export function createSponsorServer(root = directory) {
     if (pathname === '/sponsor/') pathname += 'index.html';
     if (!pathname.startsWith('/sponsor/')) return finish(404, 'Not found');
     const relative = pathname.slice('/sponsor/'.length);
-    if (!publicFiles.has(relative) && !/^avatars\/[a-z0-9][a-z0-9_-]*\.(png|jpe?g|webp)$/i.test(relative)) return finish(404, 'Not found');
+    if (!publicFiles.has(relative) && !/^avatars\/[a-z0-9][a-z0-9_-]*\.(png|jpe?g|webp)$/i.test(relative) && !/^payment-codes\/(wechat|alipay)\.png$/.test(relative)) return finish(404, 'Not found');
     const absolute = path.resolve(root, ...relative.split('/'));
     try {
       const resolvedRoot = await realpath(root);
@@ -37,6 +37,7 @@ export function createSponsorServer(root = directory) {
       const info = await lstat(absolute);
       if (!info.isFile() || info.isSymbolicLink()) return finish(404, 'Not found');
       if (relative.startsWith('avatars/') && (await lstat(path.join(root, 'avatars'))).isSymbolicLink()) return finish(404, 'Not found');
+      if (relative.startsWith('payment-codes/') && (await lstat(path.join(root, 'payment-codes'))).isSymbolicLink()) return finish(404, 'Not found');
       const bytes = await readFile(absolute);
       response.writeHead(200, {
         'Content-Type': types[path.extname(absolute).toLowerCase()] || 'application/octet-stream',

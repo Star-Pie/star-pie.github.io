@@ -73,6 +73,18 @@ h1 { font-size: clamp(36px, 5vw, 52px); line-height: 1.4; font-weight: 550; lett
 .project-link { display: inline-flex; gap: 9px; align-items: center; margin-top: 22px; font-size: 14px; text-decoration: none; font-weight: 600; }
 .project-link svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .donation-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 30px; }
+.qr-panel { display: none; max-width: 430px; margin: 20px auto 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); text-align: center; scroll-margin-top: 24px; }
+.qr-panel:target { display: block; }
+.intro:has(#pay-wechat:target) a[href='#pay-wechat'], .intro:has(#pay-alipay:target) a[href='#pay-alipay'] { outline: 2px solid var(--accent); outline-offset: 3px; }
+.qr-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.qr-heading h2 { margin: 0; font-size: 18px; }
+.qr-close { color: var(--accent); font-size: 14px; padding: 8px 0 8px 12px; }
+.payment-code { display: block; max-width: 100%; width: 290px; height: auto; margin: 0 auto 18px; background: white; border-radius: 4px; }
+.qr-panel p { font-size: 14px; line-height: 1.75; color: var(--muted); }
+.qr-note { margin-top: 16px; }
+.qr-unavailable { padding: 18px 0; }
+.qr-local-form { display: inline-flex; margin-top: 8px; color: var(--accent); font-weight: 600; }
+.qr-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
 .button { display: inline-flex; align-items: center; gap: 18px; min-height: 46px; padding: 9px 21px; border: 1px solid var(--line); border-radius: 7px; background: var(--soft); color: var(--accent); font-size: 14px; font-weight: 600; text-decoration: none; }
 .supporters-section { padding: 16px 0 68px; }
 .section-heading { display: flex; align-items: center; justify-content: center; gap: 24px; }
@@ -95,6 +107,11 @@ h1 { font-size: clamp(36px, 5vw, 52px); line-height: 1.4; font-weight: 550; lett
 .supporter-name { max-width: 100%; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; }
 a.supporter:hover .avatar-frame { border-color: var(--accent); }
 .about-list { border-top: 1px solid var(--line); padding-top: 31px; max-width: 700px; margin-inline: auto; }
+.email-acknowledgement { max-width: 680px; margin: 44px auto 0; padding-top: 28px; border-top: 1px solid var(--line); text-align: left; scroll-margin-top: 24px; }
+.email-acknowledgement h2 { font-size: 19px; margin: 0 0 14px; }
+.email-acknowledgement p { margin-top: 12px; font-size: 14px; line-height: 1.9; color: var(--muted); }
+.email-acknowledgement .contact-address { font-size: 17px; color: var(--accent); overflow-wrap: anywhere; }
+.email-acknowledgement .contact-private { font-size: 13px; }
 .about-list h2 { margin-bottom: 14px; font-size: 18px; font-weight: 600; }
 .about-list p { margin-top: 11px; font-size: 14px; color: var(--muted); line-height: 1.95; }
 .about-list .updated { margin-top: 22px; font-size: 12px; }

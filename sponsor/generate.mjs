@@ -1,6 +1,7 @@
 import { readFile, writeFile, realpath, lstat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 export const rootDirectory = fileURLToPath(new URL('./', import.meta.url));
 export const outputNames = ['index.html', 'sponsors-light.svg', 'sponsors-dark.svg'];
@@ -34,9 +35,8 @@ function httpsUrl(value, label) {
 }
 
 export function validateData(raw) {
-  record(raw, ['version', 'currency', 'updatedAt', 'donationLinks', 'sponsors'], 'data');
-  if (raw.version !== 1) throw new Error('Unsupported data version');
-  if (typeof raw.currency !== 'string' || !/^[A-Z]{3}$/.test(raw.currency)) throw new Error('currency must be one three-letter accounting currency');
+  record(raw, ['version', 'updatedAt', 'donationLinks', 'qrMethods', 'contactEmail', 'profileFormUrl', 'sponsors'], 'data');
+  if (raw.version !== 2) throw new Error('Unsupported data version; migrate private v1 amounts outside the public repository');
   const date = typeof raw.updatedAt === 'string' ? new Date(raw.updatedAt) : new Date(NaN);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw.updatedAt ?? '') || Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== raw.updatedAt) throw new Error('updatedAt must be a valid YYYY-MM-DD date');
   if (!Array.isArray(raw.sponsors) || raw.sponsors.length > 1000) throw new Error('sponsors must be an array of at most 1000 entries');
@@ -44,24 +44,57 @@ export function validateData(raw) {
   const ids = new Set();
   const sponsors = raw.sponsors.map((entry, index) => {
     const label = `sponsors[${index}]`;
-    record(entry, ['id', 'name', 'amountMinor', 'avatar', 'url'], label);
+    record(entry, ['id', 'name', 'avatar', 'url'], label);
     const key = id(entry.id, `${label}.id`);
     if (ids.has(key)) throw new Error(`Duplicate sponsor id: ${key}`);
     ids.add(key);
-    if (!Number.isSafeInteger(entry.amountMinor) || entry.amountMinor < 0) throw new Error(`${label}.amountMinor must be a non-negative safe integer`);
     const avatar = entry.avatar ?? null;
     if (avatar !== null && (typeof avatar !== 'string' || !/^avatars\/[a-z0-9][a-z0-9_-]*\.(png|jpe?g|webp)$/i.test(avatar))) throw new Error(`${label}.avatar must name a local PNG, JPEG or WebP in avatars/`);
-    return { id: key, name: text(entry.name, `${label}.name`), amountMinor: entry.amountMinor, avatar, url: entry.url == null ? null : httpsUrl(entry.url, `${label}.url`) };
+    return { id: key, name: text(entry.name, `${label}.name`), avatar, url: entry.url == null ? null : httpsUrl(entry.url, `${label}.url`) };
   });
-  // An explicit identifier tie-breaker prevents equal donations from moving when JSON is reordered.
-  sponsors.sort((a, b) => b.amountMinor - a.amountMinor || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // Public order must not encode private payment amounts or change when JSON is reordered.
+  sponsors.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   const donationLinks = raw.donationLinks.map((entry, index) => {
     const label = `donationLinks[${index}]`;
     record(entry, ['label', 'url'], label);
     record(entry.label, ['zh-CN', 'en'], `${label}.label`);
     return { label: { 'zh-CN': text(entry.label['zh-CN'], `${label}.label.zh-CN`, 40), en: text(entry.label.en, `${label}.label.en`, 60) }, url: httpsUrl(entry.url, `${label}.url`) };
   });
-  return { version: 1, currency: raw.currency, updatedAt: raw.updatedAt, donationLinks, sponsors };
+  const qrIds = new Set();
+  if (!Array.isArray(raw.qrMethods ?? []) || (raw.qrMethods ?? []).length > 2) throw new Error('qrMethods supports WeChat and Alipay only');
+  const qrMethods = (raw.qrMethods ?? []).map((entry, index) => {
+    const label = `qrMethods[${index}]`;
+    record(entry, ['id', 'label', 'image'], label);
+    if (!['wechat', 'alipay'].includes(entry.id) || qrIds.has(entry.id)) throw new Error('Invalid or duplicate QR method');
+    qrIds.add(entry.id);
+    record(entry.label, ['zh-CN', 'en'], `${label}.label`);
+    const image = entry.image ?? null;
+    if (image !== null && image !== `payment-codes/${entry.id}.png`) throw new Error('QR image must use its approved local payment-codes path');
+    return { id: entry.id, label: { 'zh-CN': text(entry.label['zh-CN'], `${label}.label.zh-CN`, 40), en: text(entry.label.en, `${label}.label.en`, 60) }, image };
+  });
+  if (raw.profileFormUrl != null) throw new Error('Web profile forms are retired; configure contactEmail instead');
+  const contactEmail = raw.contactEmail ?? null;
+  if (contactEmail !== null && (typeof contactEmail !== 'string' || contactEmail.length > 254 || !/^[A-Za-z0-9][A-Za-z0-9._+\-]{0,63}@[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?)+$/.test(contactEmail) || contactEmail.includes('..') || contactEmail.split('@')[0].endsWith('.'))) throw new Error('contactEmail must be a plain email address without headers or whitespace');
+  return { version: 2, updatedAt: raw.updatedAt, donationLinks, qrMethods, contactEmail, sponsors };
+}
+
+export async function loadPaymentCodes(directory, methods) {
+  const root = await realpath(directory);
+  const versions = new Map();
+  for (const method of methods) {
+    if (!method.image) continue;
+    const folder = path.join(root, 'payment-codes');
+    if ((await lstat(folder)).isSymbolicLink()) throw new Error('payment-codes cannot be a symbolic link');
+    const file = path.join(root, ...method.image.split('/'));
+    const info = await lstat(file);
+    const relative = path.relative(root, await realpath(file));
+    if (!info.isFile() || info.isSymbolicLink() || path.isAbsolute(relative) || relative.startsWith('..')) throw new Error('QR image must be a regular local file');
+    if (info.size > 2 * 1024 * 1024) throw new Error('QR image exceeds 2 MiB');
+    const bytes = await readFile(file);
+    avatarMediaType(bytes, '.png');
+    versions.set(method.image, createHash('sha256').update(bytes).digest('hex').slice(0, 16));
+  }
+  return versions;
 }
 
 export function escapeMarkup(value) {
@@ -111,9 +144,16 @@ export function renderSupporters(sponsors) {
   }).join('\n')}\n</ul>`;
 }
 
-export function renderPage(data, template) {
-  const links = data.donationLinks.length ? `<div class="donation-links">${data.donationLinks.map(link => `<a class="button" href="${escapeMarkup(link.url)}" target="_blank" rel="noopener noreferrer">${bilingual(link.label['zh-CN'], link.label.en)}<span aria-hidden="true">↗</span></a>`).join('')}</div>` : `<p class="support-note">${bilingual('分享使用体验、反馈问题、贡献代码，同样是珍贵的支持。', 'Sharing your experience, reporting issues and contributing code are valuable support, too.')}</p>`;
-  const replacements = { SUPPORTERS: renderSupporters(data.sponsors), DONATION_LINKS: links, UPDATED_AT: data.updatedAt };
+export function renderPage(data, template, codeVersions = new Map()) {
+  const qr = data.qrMethods ?? [];
+  const contact = data.contactEmail ? `<p class="contact-address"><a href="mailto:${escapeMarkup(data.contactEmail)}">${escapeMarkup(data.contactEmail)}</a></p>` : `<p>${bilingual('公开联系邮箱尚未配置，暂不接收展示申请。', 'A public contact email has not been configured yet.')}</p>`;
+  const acknowledgement = `<section class="email-acknowledgement" id="contact-support" aria-labelledby="contact-title"><h2 id="contact-title">${bilingual('希望加入或更新致谢名单？', 'Would you like to be listed here?')}</h2><p>${bilingual('通过微信、支付宝或爱发电支持后，如希望公开致谢，请通过邮箱联系维护者，提供希望展示的昵称、头像及个人主页，并说明哪些信息可以公开。维护者核对后更新名单。', 'After supporting through WeChat, Alipay or Afdian, email the maintainer if you would like to be listed. Include your preferred name, avatar and profile link, and state which details may be public. The maintainer will verify and update the list.')}</p><p>${bilingual('修改昵称、头像或链接，或希望移除展示，也可以通过同一邮箱联系。公开展示完全自愿；无需联系即可保持匿名。', 'Use the same email to change your name, avatar or link, or to request removal. Public acknowledgement is optional; no contact is needed to remain anonymous.')}</p>${contact}<p class="contact-private">${bilingual('核对时可说明支持渠道、日期和订单尾号。付款凭证仅私下按需提供，不会放入公开仓库。', 'For verification, mention the payment method, date and order suffix. Share payment evidence privately only when needed; it stays out of the public repository.')}</p></section>`;
+  const choices = data.donationLinks.map(link => `<a class="button" href="${escapeMarkup(link.url)}" target="_blank" rel="noopener noreferrer">${bilingual(link.label['zh-CN'], link.label.en)}<span aria-hidden="true">↗</span></a>`).join('') + qr.map(method => `<a class="button qr-choice" href="#pay-${method.id}">${bilingual(method.label['zh-CN'], method.label.en)}<span aria-hidden="true">⌄</span></a>`).join('');
+  const panels = qr.map(method => `<section class="qr-panel" id="pay-${method.id}" aria-labelledby="pay-${method.id}-title" tabindex="-1"><div class="qr-heading"><h2 id="pay-${method.id}-title">${bilingual(method.label['zh-CN'], method.label.en)}</h2><a href="#support-choices" class="qr-close">${bilingual('收起', 'Close')}</a></div>${method.image ? `<img class="payment-code" src="./${method.image}${codeVersions.has(method.image) ? '?v='+codeVersions.get(method.image) : ''}" alt="${escapeMarkup(method.label['zh-CN'])}" loading="lazy"><p>${bilingual(method.id === 'wechat' ? '请使用微信扫码，付款前核对收款方。' : '请使用支付宝扫码，付款前核对收款方。', method.id === 'wechat' ? 'Scan with WeChat and verify the recipient before paying.' : 'Scan with Alipay and verify the recipient before paying.')}</p>` : `<p class="qr-unavailable">${bilingual('此方式暂未开放。维护者配置真实二维码后即可使用。', 'This method is not available yet. The maintainer needs to configure a real payment code.')}</p>`}<p class="qr-note">${bilingual('支持完全自愿。扫码不代表已确认到账，公开致谢需另行选择并审核。', 'Support is voluntary. Scanning does not confirm payment. Public acknowledgement requires a separate choice and review.')}</p><p><a href="#contact-support">${bilingual('通过邮箱申请致谢 →', 'Request acknowledgement by email →')}</a></p></section>`).join('');
+  const links = choices ? `<nav class="donation-links" id="support-choices" aria-label="选择支持方式">${choices}</nav>${panels}` : `<p class="support-note">${bilingual('分享使用体验、反馈问题、贡献代码，同样是珍贵的支持。', 'Sharing your experience, reporting issues and contributing code are valuable support, too.')}</p>`;
+  const replacements = { SUPPORTERS: renderSupporters(data.sponsors), DONATION_LINKS: links + `<p class="support-note"><a href="#contact-support">${bilingual('希望加入或更新致谢名单？通过邮箱联系维护者 →', 'Want to join or update the list? Email the maintainer →')}</a></p>`, UPDATED_AT: data.updatedAt };
+  if (template.includes('{{CONTACT}}')) replacements.CONTACT = acknowledgement;
+  else replacements.DONATION_LINKS += acknowledgement;
   for (const key of Object.keys(replacements)) {
     if (!template.includes(`{{${key}}}`)) throw new Error(`Missing template token: ${key}`);
   }
@@ -141,7 +181,7 @@ export function renderSvg(sponsors, avatars, theme) {
   const columns = 8;
   const width = 832;
   const height = sponsors.length ? Math.ceil(sponsors.length / columns) * 118 + 32 : 180;
-  const parts = [`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="list-title list-desc">`, '<title id="list-title">StarPie supporters</title>', '<desc id="list-desc">Thank you to everyone supporting StarPie. Ordered by cumulative donations; all supporters use the same presentation.</desc>'];
+  const parts = [`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="list-title list-desc">`, '<title id="list-title">StarPie supporters</title>', '<desc id="list-desc">Thank you to everyone supporting StarPie. Stable public identifier order; all supporters use the same presentation.</desc>'];
   if (!sponsors.length) {
     parts.push(`<rect x="1" y="1" width="830" height="178" rx="18" fill="${color.surface}"/>`, `<path d="M416 28l7 17 17 7-17 7-7 17-7-17-17-7 17-7z" fill="${color.accent}"/>`, `<g font-family="system-ui, sans-serif" text-anchor="middle"><text x="416" y="112" font-size="21" fill="${color.text}">Thank you for supporting StarPie.</text><text x="416" y="141" font-size="14" fill="${color.muted}">Our public supporter list will appear here.</text></g>`);
   } else {
@@ -170,8 +210,9 @@ export async function generate(directory = rootDirectory, { check = false } = {}
   const raw = JSON.parse(await readFile(path.join(directory, 'data.json'), 'utf8'));
   const data = validateData(raw);
   const avatars = await loadAvatars(directory, data.sponsors);
+  const codeVersions = await loadPaymentCodes(directory, data.qrMethods);
   const template = await readFile(path.join(directory, 'template.html'), 'utf8');
-  const outputs = new Map([['index.html', renderPage(data, template)], ['sponsors-light.svg', renderSvg(data.sponsors, avatars, 'light')], ['sponsors-dark.svg', renderSvg(data.sponsors, avatars, 'dark')]]);
+  const outputs = new Map([['index.html', renderPage(data, template, codeVersions)], ['sponsors-light.svg', renderSvg(data.sponsors, avatars, 'light')], ['sponsors-dark.svg', renderSvg(data.sponsors, avatars, 'dark')]]);
   const changed = [];
   // Finish validation and rendering before writing anything, so bad input cannot partially update output.
   for (const [name, content] of outputs) {
