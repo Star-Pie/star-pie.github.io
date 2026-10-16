@@ -2,12 +2,15 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { createSponsorServer } from '../sponsor/server.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const runtimeScripts = new Set(['app.js', 'preferences.js', 'i18n.js', 'menu-data.js']);
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.gif': 'image/gif', '.txt': 'text/plain; charset=utf-8' };
 
 export function createSiteServer(root = projectRoot) {
+  // Reuse the sponsor page's allowlist and response headers without listening on another port.
+  const sponsorRequests = createSponsorServer(path.join(root, 'sponsor'));
   return createServer(async (request, response) => {
     const finish = (status, message) => {
       response.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -20,6 +23,10 @@ export function createSiteServer(root = projectRoot) {
     let pathname;
     try { pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname); }
     catch { return finish(400, 'Invalid URL'); }
+    if (pathname === '/sponsor' || pathname.startsWith('/sponsor/')) {
+      sponsorRequests.emit('request', request, response);
+      return;
+    }
     if (pathname === '/') pathname = '/index.html';
     const parts = pathname.slice(1).split('/');
     if (parts.some(part => !part || part.startsWith('.') || part.includes('\\') || part.includes('\0'))) return finish(404, 'Not found');

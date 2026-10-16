@@ -70,6 +70,11 @@ img { display: block; max-width: 100%; }
 h1 { font-size: clamp(36px, 5vw, 52px); line-height: 1.4; font-weight: 550; letter-spacing: -.035em; text-wrap: balance; }
 .intro-copy { max-width: 660px; margin: 24px auto 0; color: var(--muted); font-size: 17px; line-height: 1.9; }
 .support-note { margin: 23px auto 0; color: var(--muted); font-size: 14px; }
+.acknowledgement-cta { margin: 28px auto 0; text-align: center; }
+.acknowledgement-button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; max-width: 100%; min-height: 52px; padding: 12px 24px; border: 1px solid transparent; border-radius: 9px; background: var(--accent); color: var(--bg); font-size: 16px; font-weight: 600; line-height: 1.5; text-decoration: none; box-shadow: 0 6px 18px #7360b72a; }
+.acknowledgement-button:hover { background: var(--accent-hover); color: var(--bg); }
+.acknowledgement-button:focus-visible { border-radius: 9px; outline-offset: 5px; }
+.acknowledgement-button svg { flex: 0 0 20px; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .project-link { display: inline-flex; gap: 9px; align-items: center; margin-top: 22px; font-size: 14px; text-decoration: none; font-weight: 600; }
 .project-link svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .donation-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 30px; }
@@ -81,7 +86,6 @@ h1 { font-size: clamp(36px, 5vw, 52px); line-height: 1.4; font-weight: 550; lett
 .qr-close { color: var(--accent); font-size: 14px; padding: 8px 0 8px 12px; }
 .payment-code { display: block; max-width: 100%; width: 290px; height: auto; margin: 0 auto 18px; background: white; border-radius: 4px; }
 .qr-panel p { font-size: 14px; line-height: 1.75; color: var(--muted); }
-.qr-note { margin-top: 16px; }
 .qr-unavailable { padding: 18px 0; }
 .qr-local-form { display: inline-flex; margin-top: 8px; color: var(--accent); font-weight: 600; }
 .qr-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
@@ -106,15 +110,11 @@ h1 { font-size: clamp(36px, 5vw, 52px); line-height: 1.4; font-weight: 550; lett
 .avatar-initials { display: inline-flex; align-items: center; justify-content: center; background: var(--soft); color: var(--accent); font-size: 25px; font-weight: 500; }
 .supporter-name { max-width: 100%; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; }
 a.supporter:hover .avatar-frame { border-color: var(--accent); }
-.about-list { border-top: 1px solid var(--line); padding-top: 31px; max-width: 700px; margin-inline: auto; }
 .email-acknowledgement { max-width: 680px; margin: 44px auto 0; padding-top: 28px; border-top: 1px solid var(--line); text-align: left; scroll-margin-top: 24px; }
 .email-acknowledgement h2 { font-size: 19px; margin: 0 0 14px; }
 .email-acknowledgement p { margin-top: 12px; font-size: 14px; line-height: 1.9; color: var(--muted); }
-.email-acknowledgement .contact-address { font-size: 17px; color: var(--accent); overflow-wrap: anywhere; }
+.email-acknowledgement .contact-address { margin-block: 16px 12px; font-size: 18px; color: var(--accent); overflow-wrap: anywhere; }
 .email-acknowledgement .contact-private { font-size: 13px; }
-.about-list h2 { margin-bottom: 14px; font-size: 18px; font-weight: 600; }
-.about-list p { margin-top: 11px; font-size: 14px; color: var(--muted); line-height: 1.95; }
-.about-list .updated { margin-top: 22px; font-size: 12px; }
 .site-footer { display: flex; justify-content: space-between; gap: 25px; padding-block: 42px 32px; color: var(--muted); font-size: 12px; }
 .footer-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
 .footer-links a { text-decoration: none; }
@@ -130,6 +130,7 @@ a.supporter:hover .avatar-frame { border-color: var(--accent); }
   .intro-copy { margin-top: 22px; font-size: 16px; }
   .desktop-break { display: none; }
   .support-note { max-width: 290px; font-size: 13px; }
+  .acknowledgement-button { width: 100%; max-width: 340px; padding-inline: 16px; }
   .section-heading { gap: 15px; }
   .section-heading h2 { font-size: 19px; flex-shrink: 1; }
   .heading-line { width: 34px; flex-shrink: 1; }

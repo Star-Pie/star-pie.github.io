@@ -142,3 +142,50 @@ test('Typography keeps a readable minimum size at every breakpoint', async () =>
   for (const [, size] of css.matchAll(/font-size:\s*(\d+)px/g)) assert.ok(Number(size) >= 12);
   assert.match(css, /\.download-option-heading\s*\{[^}]*align-items: center/);
 });
+
+
+test('Homepage support section precedes the FAQ and links to the local sponsor page', () => {
+  const download = html.indexOf('class="download-section"');
+  const support = html.indexOf('class="support-section"');
+  const faq = html.indexOf('class="faq-section container"');
+  assert.ok(download >= 0 && download < support && support < faq);
+  const section = html.slice(support, faq);
+  assert.match(section, /aria-labelledby="support-title"/);
+  assert.match(section, /href="\.\/sponsor\/"/);
+  for (const key of ['support.title', 'support.intro', 'support.description', 'support.action']) {
+    assert.ok(section.includes('data-i18n="' + key + '"'));
+    assert.ok(translations['zh-CN'][key] && translations.en[key]);
+  }
+});
+
+test('One local preview links homepage and sponsor page while keeping sponsor source private', async t => {
+  const server = createSiteServer();
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const redirect = await fetch(base + '/sponsor', { redirect: 'manual' });
+  assert.equal(redirect.status, 308);
+  assert.equal(redirect.headers.get('location'), '/sponsor/');
+  await redirect.arrayBuffer();
+  const page = await fetch(base + '/sponsor/');
+  assert.equal(page.status, 200);
+  assert.ok(page.headers.get('content-security-policy'));
+  assert.ok((await page.text()).includes('href="../"'));
+  for (const file of ['styles.css', 'app.js', 'preferences.js', 'logo.webp', 'data.json', 'sponsors-light.svg', 'payment-codes/wechat.png']) {
+    const response = await fetch(base + '/sponsor/' + file);
+    assert.equal(response.status, 200, file);
+    await response.arrayBuffer();
+  }
+  for (const file of ['generate.mjs', 'server.mjs', 'template.html', 'README.md', 'SYNC-NOTES.md', 'tests/sponsor.test.mjs', 'payment-codes/unknown.png', 'avatars/../../package.json']) {
+    const response = await fetch(base + '/sponsor/' + file);
+    assert.equal(response.status, 404, file);
+    await response.arrayBuffer();
+  }
+  const head = await fetch(base + '/sponsor/', { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+  assert.equal((await fetch(base + '/sponsor/', { method: 'POST' })).status, 405);
+  const home = await fetch(base + '/');
+  assert.equal(home.status, 200);
+  await home.arrayBuffer();
+});

@@ -9,7 +9,7 @@ import { generate } from '../sponsor/generate.mjs';
 const mainFiles = ['index.html', '.nojekyll', 'styles/main.css', 'scripts/app.js', 'scripts/preferences.js', 'scripts/i18n.js', 'scripts/menu-data.js'];
 const sponsorFiles = ['index.html', 'styles.css', 'preferences.js', 'app.js', 'logo.webp', 'data.json', 'sponsors-light.svg', 'sponsors-dark.svg'];
 const homepage = '<!doctype html><html lang="en"><title>Homepage fixture</title><h1>Homepage remains intact</h1></html>\n';
-const baseData = () => ({ version: 2, updatedAt: '2026-10-16', donationLinks: [], sponsors: [] });
+const baseData = () => ({ version: 1, currency: 'CNY', updatedAt: '2026-10-16', donationLinks: [], sponsors: [] });
 const idsIn = output => [...output.matchAll(/data-sponsor-id="([a-z0-9-]+)"/g)].map(match => match[1]);
 
 async function fixture(t, data = baseData()) {
@@ -41,8 +41,8 @@ async function filesWithin(root, relative = '') {
   return files.sort();
 }
 
-test('One Pages build contains the unchanged homepage and freshly generated privacy-preserving sponsor page', async t => {
-  const data = { ...baseData(), sponsors: [{ id: 'smaller', name: 'Smaller public ID' }, { id: 'larger', name: 'Larger public ID' }] };
+test('One Pages build contains the unchanged homepage and freshly generated v1 amount-ranked sponsor page', async t => {
+  const data = { ...baseData(), sponsors: [{ id: 'smaller', name: 'Smaller donation', amountMinor: 12345 }, { id: 'larger', name: 'Larger donation', amountMinor: 67890 }] };
   const root = await fixture(t, data);
   const result = await buildSite(root);
   const output = path.join(root, 'dist');
@@ -57,8 +57,9 @@ test('One Pages build contains the unchanged homepage and freshly generated priv
   }
   const publishedData = JSON.parse(await readFile(path.join(output, 'sponsor', 'data.json'), 'utf8'));
   assert.deepEqual(publishedData.sponsors.map(sponsor => sponsor.id), ['larger', 'smaller']);
-  assert.ok(publishedData.sponsors.every(entry => !('amountMinor' in entry)));
-  assert.ok(!JSON.stringify(publishedData).includes('currency'));
+  assert.equal(publishedData.version, 1);
+  assert.equal(publishedData.currency, 'CNY');
+  assert.deepEqual(publishedData.sponsors.map(entry => entry.amountMinor), [67890, 12345]);
   await generate(path.join(root, 'sponsor'), { check: true });
   const manifest = JSON.parse(await readFile(path.join(output, 'build-info.json'), 'utf8'));
   assert.deepEqual(manifest.files, result.files);
@@ -66,7 +67,7 @@ test('One Pages build contains the unchanged homepage and freshly generated priv
 });
 
 test('Publication allowlist excludes source, tests, templates and unreferenced avatar files', async t => {
-  const data = { ...baseData(), sponsors: [{ id: 'one', name: 'One', avatar: 'avatars/shared.webp' }, { id: 'two', name: 'Two', avatar: 'avatars/shared.webp' }] };
+  const data = { ...baseData(), sponsors: [{ id: 'one', name: 'One', amountMinor: 100, avatar: 'avatars/shared.webp' }, { id: 'two', name: 'Two', amountMinor: 50, avatar: 'avatars/shared.webp' }] };
   const root = await fixture(t, data);
   await cp(path.join(root, 'sponsor', 'logo.webp'), path.join(root, 'sponsor', 'avatars', 'shared.webp'));
   await writeFile(path.join(root, 'sponsor', 'avatars', 'not-public.png'), 'Unreferenced private fixture');
@@ -79,7 +80,7 @@ test('Publication allowlist excludes source, tests, templates and unreferenced a
 });
 
 test('Rebuilding removes retired avatars and stale sponsor artifacts without deleting homepage output', async t => {
-  const data = { ...baseData(), sponsors: [{ id: 'retiring', name: 'Retiring fixture', avatar: 'avatars/retiring.webp' }] };
+  const data = { ...baseData(), sponsors: [{ id: 'retiring', name: 'Retiring fixture', amountMinor: 100, avatar: 'avatars/retiring.webp' }] };
   const root = await fixture(t, data);
   await cp(path.join(root, 'sponsor', 'logo.webp'), path.join(root, 'sponsor', 'avatars', 'retiring.webp'));
   await buildSite(root);

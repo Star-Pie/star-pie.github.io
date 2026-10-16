@@ -10,8 +10,8 @@ import { createSponsorServer } from '../server.mjs';
 
 const template = await readFile(new URL('../template.html', import.meta.url), 'utf8');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64');
-const base = () => ({ version: 2, updatedAt: '2026-10-16', donationLinks: [], sponsors: [] });
-const person = (id, extra = {}) => ({ id, name: id, ...extra });
+const base = () => ({ version: 1, currency: 'CNY', updatedAt: '2026-10-16', donationLinks: [], sponsors: [] });
+const person = (id, extra = {}) => ({ id, name: id, amountMinor: 0, ...extra });
 const dataWith = sponsors => validateData({ ...base(), sponsors });
 const idsIn = output => [...output.matchAll(/data-sponsor-id="([a-z0-9-]+)"/g)].map(match => match[1]);
 
@@ -30,23 +30,25 @@ async function fixture(t, raw = base()) {
   return directory;
 }
 
-test('Public identifiers sort consistently and input is not mutated', () => {
-  const raw = { ...base(), sponsors: [person('beta'), person('alpha'), person('first'), person('last')] };
+test('Cumulative amounts sort descending, ties use stable IDs, and input is not mutated', () => {
+  const raw = { ...base(), sponsors: [person('beta', { amountMinor: 5000 }), person('alpha', { amountMinor: 5000 }), person('first', { amountMinor: 9000 }), person('last')] };
   const before = structuredClone(raw);
-  assert.deepEqual(validateData(raw).sponsors.map(entry => entry.id), ['alpha', 'beta', 'first', 'last']);
+  assert.deepEqual(validateData(raw).sponsors.map(entry => entry.id), ['first', 'alpha', 'beta', 'last']);
   assert.deepEqual(raw, before);
   raw.sponsors.reverse();
-  assert.deepEqual(validateData(raw).sponsors.map(entry => entry.id), ['alpha', 'beta', 'first', 'last']);
+  assert.deepEqual(validateData(raw).sponsors.map(entry => entry.id), ['first', 'alpha', 'beta', 'last']);
 });
 
-test('Monetary values are rejected from public data even when valid', () => {
-  for (const value of [-1, 0, 5000, 0.1, '500', Number.MAX_SAFE_INTEGER, null, NaN, Infinity]) {
-    assert.throws(() => dataWith([person('one', { amountMinor: value })]), /unknown field amountMinor/);
+test('Money rejects floats, negative values, coercion and unsafe integers', () => {
+  for (const value of [-1, 0.1, '500', Number.MAX_SAFE_INTEGER + 1, null, undefined, NaN, Infinity]) {
+    assert.throws(() => dataWith([person('one', { amountMinor: value })]), /amountMinor/);
   }
+  assert.equal(dataWith([person('one', { amountMinor: 0 })]).sponsors[0].amountMinor, 0);
+  assert.equal(dataWith([person('one', { amountMinor: Number.MAX_SAFE_INTEGER })]).sponsors[0].amountMinor, Number.MAX_SAFE_INTEGER);
 });
 
-test('Private currency is rejected and a real date and v2 schema are required', () => {
-  for (const patch of [{ currency: 'CNY' }, { currency: 'CNY/USD' }, { currency: null }, { version: 1 }, { updatedAt: '2026-02-29' }, { updatedAt: '2026-13-01' }, { updatedAt: '2026-1-1' }]) {
+test('One explicit currency, a real date and v1 schema are required', () => {
+  for (const patch of [{ currency: 'cny' }, { currency: 'CNY/USD' }, { currency: null }, { currency: undefined }, { version: 2 }, { updatedAt: '2026-02-29' }, { updatedAt: '2026-13-01' }, { updatedAt: '2026-1-1' }]) {
     assert.throws(() => validateData({ ...base(), ...patch }));
   }
   assert.equal(validateData({ ...base(), updatedAt: '2024-02-29' }).updatedAt, '2024-02-29');
@@ -101,10 +103,11 @@ test('Template-looking names stay literal and repeated avatars have one embedded
   assert.equal((svg.match(/<image /g) ?? []).length, 1);
   assert.equal((svg.match(/<use /g) ?? []).length, 2);
 });
-test('HTML, public JSON and both SVG themes use the same non-monetary order', () => {
-  const data = dataWith([person('low'), person('high'), person('zero')]);
+test('HTML, public JSON and both SVG themes share amount ranking without rendering amounts', () => {
+  const data = dataWith([person('low', { amountMinor: 13579111 }), person('high', { amountMinor: 24680222 }), person('zero')]);
   assert.deepEqual(data.sponsors.map(entry => entry.id), ['high', 'low', 'zero']);
-  assert.ok(!JSON.stringify(data).includes('amountMinor'));
+  assert.equal(data.currency, 'CNY');
+  assert.equal(data.sponsors[0].amountMinor, 24680222, 'Ranking amounts are public in v1 JSON');
   const outputs = [renderPage(data, template), renderSvg(data.sponsors, new Map(), 'light'), renderSvg(data.sponsors, new Map(), 'dark')];
   for (const output of outputs) {
     assert.deepEqual(idsIn(output), ['high', 'low', 'zero']);
@@ -112,6 +115,7 @@ test('HTML, public JSON and both SVG themes use the same non-monetary order', ()
     assert.ok(!output.includes('amountMinor'));
     assert.ok(!output.includes('gold') && !output.includes('tier='));
   }
+  assert.ok(outputs[0].includes('支持金额不会直接显示在页面中，但会进入公开仓库'));
 });
 
 test('Donation buttons use confirmed data only, with bilingual labels and isolated tabs', () => {
@@ -269,4 +273,21 @@ test('Theme and language survive blocked storage, reject unknown preferences and
 
 test('Current published outputs match their data and template', async () => {
   assert.deepEqual((await generate(rootDirectory, { check: true })).changed, []);
+});
+
+
+test('Sponsor page omits the about-list section and visual timestamp while preserving contact guidance', () => {
+  const data = validateData(base());
+  const html = renderPage(data, template);
+  for (const removed of ['about-list', 'about-title', '关于这份名单', 'About this list', '名单更新于', 'List updated']) {
+    assert.ok(!html.includes(removed), removed);
+  }
+  assert.ok(html.includes('id="contact-support"'));
+  assert.ok(html.includes('支持金额不会直接显示在页面中，但会进入公开仓库'));
+  assert.ok(html.includes('付款凭证仅供私下核对，不会进入公开仓库'));
+  assert.ok(!html.includes('{{UPDATED_AT}}'));
+  assert.equal(data.updatedAt, '2026-10-16', 'The public data timestamp remains available');
+  const datedTemplate = template.replace('{{CONTACT}}', '{{CONTACT}}<time datetime="{{UPDATED_AT}}">{{UPDATED_AT}}</time>');
+  const dated = renderPage(data, datedTemplate);
+  assert.ok(dated.includes('<time datetime="2026-10-16">2026-10-16</time>'));
 });

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { validateData, renderPage, loadPaymentCodes } from '../generate.mjs';
 
 const method = (id = 'wechat', image = null) => ({ id, label: { 'zh-CN': '扫码支持', en: 'Scan to support' }, image });
-const data = qrMethods => ({ version: 2, updatedAt: '2026-10-16', donationLinks: [], sponsors: [], qrMethods });
+const data = qrMethods => ({ version: 1, currency: 'CNY', updatedAt: '2026-10-16', donationLinks: [], sponsors: [], qrMethods });
 // A non-payment 1 px PNG fixture; never published in repository data.
 export const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64');
 
@@ -41,7 +41,9 @@ test('Unavailable QR choice renders an honest fragment panel, real code renders 
   assert.ok(!unavailable.includes('class="payment-code"'));
   const ready = renderPage(validateData(data([method('wechat', 'payment-codes/wechat.png')])), template);
   assert.ok(ready.includes('src="./payment-codes/wechat.png"'));
-  assert.ok(ready.includes('扫码不代表已确认到账'));
+  assert.ok(ready.includes('付款前核对收款方'));
+  assert.ok(!ready.includes('class="qr-note"'));
+  assert.ok(!ready.includes('通过邮箱申请致谢 →'));
 });
 
 test('QR loader accepts PNG and refuses missing, disguised and oversized files', async t => {
@@ -75,8 +77,15 @@ test('Email acknowledgement replaces public forms, supports corrections/removal 
   const template = await readFile(new URL('../template.html', import.meta.url), 'utf8');
   const raw = { ...data([method(), method('alipay')]), contactEmail: 'support+project@example.org' };
   const html = renderPage(validateData(raw), template);
+  const contactHeading = html.match(/<h2 id="contact-title">([\s\S]*?)<\/h2>/)[1];
+  assert.ok(contactHeading.includes('希望公开展示在致谢名单') && contactHeading.includes('Be publicly acknowledged'));
   assert.ok(html.includes('mailto:support+project@example.org'));
-  assert.ok(html.includes('希望移除展示') && html.includes('无需联系即可保持匿名'));
+  assert.ok(html.includes('用于核对的订单信息') && html.includes('如需修改昵称、头像或链接，或希望移除展示'));
+  assert.ok(html.includes('公开展示完全自愿') && html.includes('支持金额不会直接显示在页面中，但会进入公开仓库'));
+  assert.ok(html.includes('付款凭证仅供私下核对，不会进入公开仓库'));
+  assert.ok(html.includes('联系邮箱：') && html.includes('Email: '));
+  const contactSection = html.match(/<section class="email-acknowledgement"[\s\S]*?<\/section>/)[0];
+  assert.equal((contactSection.match(/<p(?:\s|>)/g) ?? []).length, 4, 'Keep the application and update instructions, email address and privacy note');
   for (const retired of ['LOCAL_SUPPORT_', 'preference-panel', 'support.html', '<form']) assert.ok(!html.includes(retired));
   for (const email of ['not-email', 'a@example.org?subject=Injected', 'a@example.org\r\nBcc:other@example.org', 'a..b@example.org', '<script>@example.org']) {
     assert.throws(() => validateData({ ...raw, contactEmail: email }), /contactEmail/);
@@ -86,4 +95,22 @@ test('Email acknowledgement replaces public forms, supports corrections/removal 
   const pending = renderPage(validateData(data([method()])), template);
   assert.ok(pending.includes('公开联系邮箱尚未配置'));
   assert.ok(!pending.includes('mailto:'));
+});
+
+
+test('Contact entry is a prominent single CTA and QR panels omit repeated acknowledgement content', async () => {
+  const template = await readFile(new URL('../template.html', import.meta.url), 'utf8');
+  const html = renderPage(validateData(data([
+    method('wechat', 'payment-codes/wechat.png'),
+    method('alipay', 'payment-codes/alipay.png')
+  ])), template);
+  assert.match(html, /class="acknowledgement-button" href="#contact-support"/);
+  assert.ok(html.includes('希望公开展示在致谢名单') && html.includes('Be publicly acknowledged'));
+  assert.equal((html.match(/href="#contact-support"/g) ?? []).length, 1);
+  const panels = [...html.matchAll(/<section class="qr-panel"[\s\S]*?<\/section>/g)];
+  assert.equal(panels.length, 2);
+  for (const [panel] of panels) {
+    assert.ok(panel.includes('付款前核对收款方'));
+    assert.ok(!panel.includes('qr-note') && !panel.includes('#contact-support'));
+  }
 });

@@ -35,8 +35,9 @@ function httpsUrl(value, label) {
 }
 
 export function validateData(raw) {
-  record(raw, ['version', 'updatedAt', 'donationLinks', 'qrMethods', 'contactEmail', 'profileFormUrl', 'sponsors'], 'data');
-  if (raw.version !== 2) throw new Error('Unsupported data version; migrate private v1 amounts outside the public repository');
+  record(raw, ['version', 'currency', 'updatedAt', 'donationLinks', 'qrMethods', 'contactEmail', 'profileFormUrl', 'sponsors'], 'data');
+  if (raw.version !== 1) throw new Error('Unsupported data version; v1 requires explicit currency and cumulative amountMinor values');
+  if (typeof raw.currency !== 'string' || !/^[A-Z]{3}$/.test(raw.currency)) throw new Error('currency must be one three-letter accounting currency');
   const date = typeof raw.updatedAt === 'string' ? new Date(raw.updatedAt) : new Date(NaN);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw.updatedAt ?? '') || Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== raw.updatedAt) throw new Error('updatedAt must be a valid YYYY-MM-DD date');
   if (!Array.isArray(raw.sponsors) || raw.sponsors.length > 1000) throw new Error('sponsors must be an array of at most 1000 entries');
@@ -44,16 +45,17 @@ export function validateData(raw) {
   const ids = new Set();
   const sponsors = raw.sponsors.map((entry, index) => {
     const label = `sponsors[${index}]`;
-    record(entry, ['id', 'name', 'avatar', 'url'], label);
+    record(entry, ['id', 'name', 'amountMinor', 'avatar', 'url'], label);
     const key = id(entry.id, `${label}.id`);
     if (ids.has(key)) throw new Error(`Duplicate sponsor id: ${key}`);
     ids.add(key);
+    if (!Number.isSafeInteger(entry.amountMinor) || entry.amountMinor < 0) throw new Error(`${label}.amountMinor must be a non-negative safe integer`);
     const avatar = entry.avatar ?? null;
     if (avatar !== null && (typeof avatar !== 'string' || !/^avatars\/[a-z0-9][a-z0-9_-]*\.(png|jpe?g|webp)$/i.test(avatar))) throw new Error(`${label}.avatar must name a local PNG, JPEG or WebP in avatars/`);
-    return { id: key, name: text(entry.name, `${label}.name`), avatar, url: entry.url == null ? null : httpsUrl(entry.url, `${label}.url`) };
+    return { id: key, name: text(entry.name, `${label}.name`), amountMinor: entry.amountMinor, avatar, url: entry.url == null ? null : httpsUrl(entry.url, `${label}.url`) };
   });
-  // Public order must not encode private payment amounts or change when JSON is reordered.
-  sponsors.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  // Restore v1 ranking: cumulative amounts descending, stable IDs for equal amounts.
+  sponsors.sort((a, b) => b.amountMinor - a.amountMinor || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const donationLinks = raw.donationLinks.map((entry, index) => {
     const label = `donationLinks[${index}]`;
     record(entry, ['label', 'url'], label);
@@ -75,7 +77,7 @@ export function validateData(raw) {
   if (raw.profileFormUrl != null) throw new Error('Web profile forms are retired; configure contactEmail instead');
   const contactEmail = raw.contactEmail ?? null;
   if (contactEmail !== null && (typeof contactEmail !== 'string' || contactEmail.length > 254 || !/^[A-Za-z0-9][A-Za-z0-9._+\-]{0,63}@[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?)+$/.test(contactEmail) || contactEmail.includes('..') || contactEmail.split('@')[0].endsWith('.'))) throw new Error('contactEmail must be a plain email address without headers or whitespace');
-  return { version: 2, updatedAt: raw.updatedAt, donationLinks, qrMethods, contactEmail, sponsors };
+  return { version: 1, currency: raw.currency, updatedAt: raw.updatedAt, donationLinks, qrMethods, contactEmail, sponsors };
 }
 
 export async function loadPaymentCodes(directory, methods) {
@@ -146,12 +148,13 @@ export function renderSupporters(sponsors) {
 
 export function renderPage(data, template, codeVersions = new Map()) {
   const qr = data.qrMethods ?? [];
-  const contact = data.contactEmail ? `<p class="contact-address"><a href="mailto:${escapeMarkup(data.contactEmail)}">${escapeMarkup(data.contactEmail)}</a></p>` : `<p>${bilingual('公开联系邮箱尚未配置，暂不接收展示申请。', 'A public contact email has not been configured yet.')}</p>`;
-  const acknowledgement = `<section class="email-acknowledgement" id="contact-support" aria-labelledby="contact-title"><h2 id="contact-title">${bilingual('希望加入或更新致谢名单？', 'Would you like to be listed here?')}</h2><p>${bilingual('通过微信、支付宝或爱发电支持后，如希望公开致谢，请通过邮箱联系维护者，提供希望展示的昵称、头像及个人主页，并说明哪些信息可以公开。维护者核对后更新名单。', 'After supporting through WeChat, Alipay or Afdian, email the maintainer if you would like to be listed. Include your preferred name, avatar and profile link, and state which details may be public. The maintainer will verify and update the list.')}</p><p>${bilingual('修改昵称、头像或链接，或希望移除展示，也可以通过同一邮箱联系。公开展示完全自愿；无需联系即可保持匿名。', 'Use the same email to change your name, avatar or link, or to request removal. Public acknowledgement is optional; no contact is needed to remain anonymous.')}</p>${contact}<p class="contact-private">${bilingual('核对时可说明支持渠道、日期和订单尾号。付款凭证仅私下按需提供，不会放入公开仓库。', 'For verification, mention the payment method, date and order suffix. Share payment evidence privately only when needed; it stays out of the public repository.')}</p></section>`;
+  const contact = data.contactEmail ? `<p class="contact-address">${bilingual('联系邮箱：', 'Email: ')}<a href="mailto:${escapeMarkup(data.contactEmail)}">${escapeMarkup(data.contactEmail)}</a></p>` : `<p>${bilingual('公开联系邮箱尚未配置，暂不接收展示申请。', 'A public contact email has not been configured yet.')}</p>`;
+  const acknowledgement = `<section class="email-acknowledgement" id="contact-support" aria-labelledby="contact-title"><h2 id="contact-title">${bilingual('希望公开展示在致谢名单', 'Be publicly acknowledged')}</h2><p>${bilingual('通过微信、支付宝或爱发电支持 StarPie 后，如希望加入公开致谢名单，请通过邮箱联系维护者，提供希望展示的昵称、头像、个人主页，以及用于核对的订单信息。', 'After supporting StarPie through WeChat, Alipay or Afdian, email the maintainer if you would like to join the public acknowledgement list. Include your preferred display name, avatar, profile link and order information for verification.')}</p><p>${bilingual('如需修改昵称、头像或链接，或希望移除展示，也可通过同一邮箱联系。', 'Use the same email to update your display name, avatar or profile link, or to request removal from the list.')}</p>${contact}<p class="contact-private">${bilingual('公开展示完全自愿，展示内容包括昵称、头像及个人主页。支持金额不会直接显示在页面中，但会进入公开仓库；付款凭证仅供私下核对，不会进入公开仓库。', 'Public listing is entirely optional and includes your display name, avatar and profile link. Support amounts are not shown directly on the page, but are included in the public repository. Payment evidence is used only for private verification and is not added to the public repository.')}</p></section>`;
   const choices = data.donationLinks.map(link => `<a class="button" href="${escapeMarkup(link.url)}" target="_blank" rel="noopener noreferrer">${bilingual(link.label['zh-CN'], link.label.en)}<span aria-hidden="true">↗</span></a>`).join('') + qr.map(method => `<a class="button qr-choice" href="#pay-${method.id}">${bilingual(method.label['zh-CN'], method.label.en)}<span aria-hidden="true">⌄</span></a>`).join('');
-  const panels = qr.map(method => `<section class="qr-panel" id="pay-${method.id}" aria-labelledby="pay-${method.id}-title" tabindex="-1"><div class="qr-heading"><h2 id="pay-${method.id}-title">${bilingual(method.label['zh-CN'], method.label.en)}</h2><a href="#support-choices" class="qr-close">${bilingual('收起', 'Close')}</a></div>${method.image ? `<img class="payment-code" src="./${method.image}${codeVersions.has(method.image) ? '?v='+codeVersions.get(method.image) : ''}" alt="${escapeMarkup(method.label['zh-CN'])}" loading="lazy"><p>${bilingual(method.id === 'wechat' ? '请使用微信扫码，付款前核对收款方。' : '请使用支付宝扫码，付款前核对收款方。', method.id === 'wechat' ? 'Scan with WeChat and verify the recipient before paying.' : 'Scan with Alipay and verify the recipient before paying.')}</p>` : `<p class="qr-unavailable">${bilingual('此方式暂未开放。维护者配置真实二维码后即可使用。', 'This method is not available yet. The maintainer needs to configure a real payment code.')}</p>`}<p class="qr-note">${bilingual('支持完全自愿。扫码不代表已确认到账，公开致谢需另行选择并审核。', 'Support is voluntary. Scanning does not confirm payment. Public acknowledgement requires a separate choice and review.')}</p><p><a href="#contact-support">${bilingual('通过邮箱申请致谢 →', 'Request acknowledgement by email →')}</a></p></section>`).join('');
+  const panels = qr.map(method => `<section class="qr-panel" id="pay-${method.id}" aria-labelledby="pay-${method.id}-title" tabindex="-1"><div class="qr-heading"><h2 id="pay-${method.id}-title">${bilingual(method.label['zh-CN'], method.label.en)}</h2><a href="#support-choices" class="qr-close">${bilingual('收起', 'Close')}</a></div>${method.image ? `<img class="payment-code" src="./${method.image}${codeVersions.has(method.image) ? '?v='+codeVersions.get(method.image) : ''}" alt="${escapeMarkup(method.label['zh-CN'])}" loading="lazy"><p>${bilingual(method.id === 'wechat' ? '请使用微信扫码，付款前核对收款方。' : '请使用支付宝扫码，付款前核对收款方。', method.id === 'wechat' ? 'Scan with WeChat and verify the recipient before paying.' : 'Scan with Alipay and verify the recipient before paying.')}</p>` : `<p class="qr-unavailable">${bilingual('此方式暂未开放。维护者配置真实二维码后即可使用。', 'This method is not available yet. The maintainer needs to configure a real payment code.')}</p>`}</section>`).join('');
   const links = choices ? `<nav class="donation-links" id="support-choices" aria-label="选择支持方式">${choices}</nav>${panels}` : `<p class="support-note">${bilingual('分享使用体验、反馈问题、贡献代码，同样是珍贵的支持。', 'Sharing your experience, reporting issues and contributing code are valuable support, too.')}</p>`;
-  const replacements = { SUPPORTERS: renderSupporters(data.sponsors), DONATION_LINKS: links + `<p class="support-note"><a href="#contact-support">${bilingual('希望加入或更新致谢名单？通过邮箱联系维护者 →', 'Want to join or update the list? Email the maintainer →')}</a></p>`, UPDATED_AT: data.updatedAt };
+  const replacements = { SUPPORTERS: renderSupporters(data.sponsors), DONATION_LINKS: links + `<div class="acknowledgement-cta"><a class="acknowledgement-button" href="#contact-support"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/></svg>${bilingual('希望公开展示在致谢名单', 'Be publicly acknowledged')}</a></div>` };
+  if (template.includes('{{UPDATED_AT}}')) replacements.UPDATED_AT = data.updatedAt;
   if (template.includes('{{CONTACT}}')) replacements.CONTACT = acknowledgement;
   else replacements.DONATION_LINKS += acknowledgement;
   for (const key of Object.keys(replacements)) {
@@ -181,7 +184,7 @@ export function renderSvg(sponsors, avatars, theme) {
   const columns = 8;
   const width = 832;
   const height = sponsors.length ? Math.ceil(sponsors.length / columns) * 118 + 32 : 180;
-  const parts = [`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="list-title list-desc">`, '<title id="list-title">StarPie supporters</title>', '<desc id="list-desc">Thank you to everyone supporting StarPie. Stable public identifier order; all supporters use the same presentation.</desc>'];
+  const parts = [`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="list-title list-desc">`, '<title id="list-title">StarPie supporters</title>', '<desc id="list-desc">Thank you to everyone supporting StarPie. Ordered by cumulative donations; all supporters use the same presentation.</desc>'];
   if (!sponsors.length) {
     parts.push(`<rect x="1" y="1" width="830" height="178" rx="18" fill="${color.surface}"/>`, `<path d="M416 28l7 17 17 7-17 7-7 17-7-17-17-7 17-7z" fill="${color.accent}"/>`, `<g font-family="system-ui, sans-serif" text-anchor="middle"><text x="416" y="112" font-size="21" fill="${color.text}">Thank you for supporting StarPie.</text><text x="416" y="141" font-size="14" fill="${color.muted}">Our public supporter list will appear here.</text></g>`);
   } else {

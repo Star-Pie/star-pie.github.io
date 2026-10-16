@@ -1,5 +1,6 @@
 {
-  "version": 2,
+  "version": 1,
+  "currency": "CNY",
   "updatedAt": "2026-10-16",
   "donationLinks": [
     {
