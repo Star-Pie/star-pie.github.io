@@ -18,11 +18,12 @@ npm run dev -- --port 4322
 
 ```powershell
 npm run check
+node sponsor/generate.mjs
 npm test
 npm run build
 ```
 
-构建结果在 dist/；也可以直接部署根目录中的 index.html、styles/、scripts/、assets/ 和 .nojekyll。构建不会安装依赖或访问网络。dist/ 是生成目录，请勿手工放入其他文件。构建采用覆盖复制；移除源文件时也需要清理对应的旧构建产物。
+构建结果在 dist/，同时包含主页和 sponsor/ 赞助页。构建会先校验赞助者资料并重新生成赞助页与 SVG，再复制发布资源；不会安装依赖或访问网络。dist/ 是生成目录，请勿手工放入其他文件。赞助页只发布白名单资源与名单引用的头像，每次重建仅清理 dist/sponsor/，避免旧资料残留；其他主页资源仍沿用覆盖复制，移除源文件时需要清理对应旧产物。
 
 ## GitHub Pages
 
@@ -37,7 +38,7 @@ npm run build
 
 工作流行为：
 
-- **向 main 推送**：语法检查 → 回归测试 → 静态构建 → 上传 dist/ → 发布到 Pages。
+- **向 main 推送**：语法检查 → 生成赞助页与 SVG → 全站回归测试 → 合并构建主页和赞助页 → 上传 dist/ → 发布到 Pages。
 - **向 main 提交 Pull Request**：只检查、测试和构建，不上传发布产物，也不会部署网站。
 - **手动运行**：可在 Actions 页面通过 Run workflow 触发；只有选择 main 才会执行发布，其他分支只做检查和构建。
 - 默认只授予源码读取权限；只有发布任务拥有 `pages: write` 和 `id-token: write`，并依赖构建成功。
@@ -61,6 +62,8 @@ npm run build
 - .github/workflows/deploy-pages.yml：main 自动发布、PR 检查与手动构建/发布。
 - tests/site.test.mjs：文案一致性、资源/锚点、轮盘几何和本地服务器测试。
 - tests/pages-workflow.test.mjs：发布分支限制、任务依赖、产物范围和最小权限回归检查。
+- tests/build.test.mjs：主页与赞助页共同构建、发布白名单、旧头像清理、资源解析和输出路径安全。
+- sponsor/：手工维护的赞助者数据、独立网页、SVG 生成器与维护说明；发布后路径为 /sponsor/。
 
 ## 内容与版本边界
 

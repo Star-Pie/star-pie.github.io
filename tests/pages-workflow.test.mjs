@@ -17,10 +17,11 @@ test('Pages workflow handles main pushes, pull requests, and manual runs', () =>
 
 test('Pages checks and builds before uploading only the static output', () => {
   const check = build.indexOf('run: npm run check');
+  const generate = build.indexOf('run: node sponsor/generate.mjs');
   const tests = build.indexOf('run: npm test');
   const compile = build.indexOf('run: npm run build');
   const upload = build.indexOf('uses: actions/upload-pages-artifact@');
-  assert.ok(check >= 0 && check < tests && tests < compile && compile < upload);
+  assert.ok(check >= 0 && check < generate && generate < tests && tests < compile && compile < upload);
   assert.match(build, /path: dist\s*$/);
   assert.match(build, /package-manager-cache: false/);
   assert.doesNotMatch(build, /run: npm (?:install|ci)\b/);

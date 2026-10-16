@@ -35,6 +35,9 @@ jobs:
       - name: Check JavaScript syntax
         run: npm run check
 
+      - name: Generate sponsor page and SVGs
+        run: node sponsor/generate.mjs
+
       - name: Run regression tests
         run: npm test
 
