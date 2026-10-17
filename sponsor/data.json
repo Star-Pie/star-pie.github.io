@@ -1,7 +1,7 @@
 {
   "version": 1,
   "currency": "CNY",
-  "updatedAt": "2026-10-16",
+  "updatedAt": "2026-10-17",
   "donationLinks": [
     {
       "label": {
@@ -29,6 +29,13 @@
       "image": "payment-codes/alipay.png"
     }
   ],
-  "sponsors": [],
+  "sponsors": [
+    {
+      "id": "afdian-1d0ac",
+      "name": "爱发电用户_1d0ac",
+      "amountMinor": 500,
+      "avatar": "avatars/afdian-1d0ac.png"
+    }
+  ],
   "contactEmail": "erisnebula09@gmail.com"
 }
