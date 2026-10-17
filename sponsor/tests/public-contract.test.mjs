@@ -41,11 +41,14 @@ test('Original v1 input remains usable without optional QR and email settings', 
   assert.equal(normalized.contactEmail, null);
 });
 
-test('Candidate keeps the confirmed support channels without inventing donors or amounts', async () => {
+test('Published data keeps the confirmed supporter and support channels', async () => {
   const data = validateData(JSON.parse(await readFile(new URL('../data.json', import.meta.url), 'utf8')));
   assert.equal(data.version, 1);
   assert.equal(data.currency, 'CNY');
-  assert.deepEqual(data.sponsors, []);
+  assert.deepEqual(data.sponsors, [{
+    id: 'afdian-1d0ac', name: '爱发电用户_1d0ac', amountMinor: 500,
+    avatar: 'avatars/afdian-1d0ac.png', url: null
+  }]);
   assert.ok(data.donationLinks.some(link => link.url === 'https://afdian.com/a/starpieproject'));
   assert.deepEqual(data.qrMethods.map(method => method.id), ['wechat', 'alipay']);
   assert.ok(data.contactEmail);
