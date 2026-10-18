@@ -139,11 +139,37 @@ test('Empty output contains no fictitious donors and does not require JavaScript
 test('Compact SVG wraps after eight equal-size avatars and preserves complete names in titles', () => {
   const data = dataWith(Array.from({ length: 9 }, (_, i) => person(`person-${i}`, { name: '很长的昵称 With emoji 🌟' })));
   const svg = renderSvg(data.sponsors, new Map(), 'light');
-  assert.ok(svg.includes('height="268"'));
+  assert.ok(svg.includes('height="334"'));
   assert.equal((svg.match(/r="36"/g) ?? []).length, 9);
   assert.equal((svg.match(/<title>很长的昵称 With emoji 🌟<\/title>/g) ?? []).length, 9);
   assert.ok(svg.includes('…'));
   assert.throws(() => renderSvg(data.sponsors, new Map(), 'unknown'));
+});
+
+test('README SVG owns its background and keeps readable labels in either host theme', () => {
+  const luminance = hex => {
+    const rgb = hex.slice(1).match(/../g).map(value => parseInt(value, 16) / 255)
+      .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+  };
+  for (const theme of ['light', 'dark']) {
+    for (const count of [0, 1, 3, 4, 9]) {
+      const sponsors = dataWith(Array.from({ length: count }, (_, index) => person(`entry-${index}`))).sponsors;
+      const svg = renderSvg(sponsors, new Map(), theme);
+      const surface = svg.match(/<rect data-surface="acknowledgement"[^>]*fill="(#[0-9a-f]{6})"/);
+      assert.ok(surface, 'The SVG must remain readable without any host background');
+      assert.ok(svg.indexOf('data-surface="acknowledgement"') < svg.indexOf('<text'));
+      const background = luminance(surface[1]);
+      for (const match of svg.matchAll(/<text\b[^>]*fill="(#[0-9a-f]{6})"/g)) {
+        const foreground = luminance(match[1]);
+        const contrast = (Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05);
+        assert.ok(contrast >= 4.5, `${theme}: text contrast ${contrast} is below 4.5`);
+      }
+      assert.deepEqual(idsIn(svg), sponsors.map(entry => entry.id));
+      assert.ok(!svg.includes('<script') && !svg.includes('foreignObject'));
+      if (count > 0 && count <= 3) assert.ok(svg.includes('height="128"'));
+    }
+  }
 });
 
 test('Local avatars are verified and embedded into SVG rather than linked remotely', async t => {
