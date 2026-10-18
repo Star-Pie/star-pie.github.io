@@ -180,28 +180,37 @@ function shortName(name) {
 
 export function renderSvg(sponsors, avatars, theme) {
   if (!['light', 'dark'].includes(theme)) throw new Error('Unknown SVG theme');
-  const color = theme === 'dark' ? { text: '#f2f3ff', muted: '#a7afc8', line: '#46445f', accent: '#b6a9ff', surface: '#171b2d' } : { text: '#24283e', muted: '#606981', line: '#ded8ef', accent: '#7360b7', surface: '#f1eefb' };
+  const color = theme === 'dark' ? { text: '#f2f3ff', muted: '#a7afc8', line: '#46445f', accent: '#b6a9ff', surface: '#171b2d' } : { text: '#24283e', muted: '#606981', line: '#ded8ef', accent: '#6e57af', surface: '#f1eefb' };
   const columns = 8;
-  const width = 832;
-  const height = sponsors.length ? Math.ceil(sponsors.length / columns) * 118 + 32 : 180;
+  const compact = sponsors.length > 0 && sponsors.length <= 3;
+  const width = compact ? 640 : 832;
+  const height = compact ? 128 : sponsors.length ? Math.ceil(sponsors.length / columns) * 118 + 98 : 180;
   const parts = [`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="list-title list-desc">`, '<title id="list-title">StarPie supporters</title>', '<desc id="list-desc">Thank you to everyone supporting StarPie. Ordered by cumulative donations; all supporters use the same presentation.</desc>'];
+  // GitHub's selected theme can differ from prefers-color-scheme. Own the surface
+  // so both SVG variants stay legible regardless of the README background.
+  parts.push(`<rect data-surface="acknowledgement" x="1" y="1" width="${width - 2}" height="${height - 2}" rx="18" fill="${color.surface}" stroke="${color.line}"/>`);
   if (!sponsors.length) {
-    parts.push(`<rect x="1" y="1" width="830" height="178" rx="18" fill="${color.surface}"/>`, `<path d="M416 28l7 17 17 7-17 7-7 17-7-17-17-7 17-7z" fill="${color.accent}"/>`, `<g font-family="system-ui, sans-serif" text-anchor="middle"><text x="416" y="112" font-size="21" fill="${color.text}">Thank you for supporting StarPie.</text><text x="416" y="141" font-size="14" fill="${color.muted}">Our public supporter list will appear here.</text></g>`);
+    parts.push(`<path d="M416 28l7 17 17 7-17 7-7 17-7-17-17-7 17-7z" fill="${color.accent}"/>`, `<g font-family="system-ui, sans-serif" text-anchor="middle"><text x="416" y="112" font-size="21" fill="${color.text}">Thank you for supporting StarPie.</text><text x="416" y="141" font-size="14" fill="${color.muted}">Our public supporter list will appear here.</text></g>`);
   } else {
+    const headingY = compact ? 58 : 44;
+    parts.push(`<path d="M12 0l3.5 8.5L24 12l-8.5 3.5L12 24l-3.5-8.5L0 12l8.5-3.5z" transform="translate(32 ${headingY - 21})" fill="${color.accent}"/>`, `<text x="68" y="${headingY}" font-family="system-ui, sans-serif" font-size="${compact ? 20 : 24}" font-weight="650" fill="${color.text}">感谢每一份支持</text>`, `<text x="32" y="${headingY + 29}" font-family="system-ui, sans-serif" font-size="${compact ? 12 : 15}" fill="${color.muted}">Thank you for supporting StarPie.</text>`);
+    if (compact) parts.push(`<path d="M344 24v80" fill="none" stroke="${color.line}"/>`);
     // Store each distinct bitmap once, even if multiple entries share an avatar.
     const avatarIds = new Map(Array.from(avatars.keys(), (key, index) => [key, `source-avatar-${index}`]));
     if (avatars.size) parts.push(`<defs>${Array.from(avatars, ([key, image]) => `<image id="${avatarIds.get(key)}" href="${image}" width="62" height="62" preserveAspectRatio="xMidYMid slice"/>`).join('')}</defs>`);
     const occupiedColumns = Math.min(columns, sponsors.length);
     const offset = sponsors.length < columns ? (width - occupiedColumns * 98) / 2 : 24;
     sponsors.forEach((sponsor, index) => {
-      const x = offset + (index % columns + 0.5) * 98;
-      const y = 54 + Math.floor(index / columns) * 118;
+      const x = compact ? 360 + (index + 0.5) * 256 / sponsors.length : offset + (index % columns + 0.5) * 98;
+      const y = compact ? 53 : 128 + Math.floor(index / columns) * 118;
       const clipId = `avatar-${sponsor.id}`;
       const title = `<title>${escapeMarkup(sponsor.name)}</title>`;
       const image = sponsor.avatar ? avatars.get(sponsor.avatar) : null;
       if (sponsor.avatar && !image) throw new Error(`Avatar was not loaded: ${sponsor.avatar}`);
       const face = image ? `<defs><clipPath id="${clipId}"><circle cx="${x}" cy="${y}" r="31"/></clipPath></defs><g clip-path="url(#${clipId})"><use href="#${avatarIds.get(sponsor.avatar)}" x="${x - 31}" y="${y - 31}"/></g>` : `<circle cx="${x}" cy="${y}" r="31" fill="${color.surface}"/><text x="${x}" y="${y + 7}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="19" fill="${color.accent}">${escapeMarkup(initials(sponsor.name))}</text>`;
-      const body = `${title}<circle cx="${x}" cy="${y}" r="36" fill="none" stroke="${color.line}" stroke-width="1.5"/>${face}<text x="${x}" y="${y + 58}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="${color.text}">${escapeMarkup(shortName(sponsor.name))}</text>`;
+      const labelWidth = compact ? Math.min(180, 256 / sponsors.length - 12) : 92;
+      const labelId = `label-${sponsor.id}`;
+      const body = `${title}<circle cx="${x}" cy="${y}" r="36" fill="none" stroke="${color.accent}" stroke-width="1.5"/>${face}<defs><clipPath id="${labelId}"><rect x="${x - labelWidth / 2}" y="${y + 42}" width="${labelWidth}" height="24"/></clipPath></defs><text x="${x}" y="${y + 58}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="${compact ? 18 : 14}" font-weight="600" fill="${color.text}" clip-path="url(#${labelId})">${escapeMarkup(shortName(sponsor.name))}</text>`;
       parts.push(`<g data-sponsor-id="${sponsor.id}">${sponsor.url ? `<a href="${escapeMarkup(sponsor.url)}" target="_blank" rel="noopener noreferrer">${body}</a>` : body}</g>`);
     });
   }
