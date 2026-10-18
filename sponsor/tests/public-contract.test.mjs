@@ -46,7 +46,7 @@ test('Published data keeps the confirmed supporter and support channels', async 
   assert.equal(data.version, 1);
   assert.equal(data.currency, 'CNY');
   assert.deepEqual(data.sponsors, [{
-    id: 'afdian-1d0ac', name: '爱发电用户_1d0ac', amountMinor: 500,
+    id: 'afdian-1d0ac', name: 'But', amountMinor: 500,
     avatar: 'avatars/afdian-1d0ac.png', url: null
   }]);
   assert.ok(data.donationLinks.some(link => link.url === 'https://afdian.com/a/starpieproject'));
