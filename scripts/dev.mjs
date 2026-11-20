@@ -6,7 +6,7 @@ import { createSponsorServer } from '../sponsor/server.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const runtimeScripts = new Set(['app.js', 'preferences.js', 'i18n.js', 'menu-data.js']);
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.gif': 'image/gif', '.txt': 'text/plain; charset=utf-8' };
+const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.gif': 'image/gif', '.webm': 'video/webm', '.txt': 'text/plain; charset=utf-8' };
 
 export function createSiteServer(root = projectRoot) {
   // Reuse the sponsor page's allowlist and response headers without listening on another port.
@@ -31,7 +31,8 @@ export function createSiteServer(root = projectRoot) {
     const parts = pathname.slice(1).split('/');
     if (parts.some(part => !part || part.startsWith('.') || part.includes('\\') || part.includes('\0'))) return finish(404, 'Not found');
     const file = parts.join('/');
-    const allowed = file === 'index.html' || file === 'styles/main.css' || (parts[0] === 'assets' && parts.length === 2) || (parts[0] === 'scripts' && parts.length === 2 && runtimeScripts.has(parts[1]));
+    const appIcon = /^assets\/apps\/[a-z0-9-]+\.png$/.test(file);
+    const allowed = appIcon || file === 'index.html' || file === 'styles/main.css' || (parts[0] === 'assets' && parts.length === 2) || (parts[0] === 'scripts' && parts.length === 2 && runtimeScripts.has(parts[1]));
     if (!allowed) return finish(404, 'Not found');
     const absolute = path.resolve(root, ...parts);
     if (!absolute.startsWith(path.resolve(root) + path.sep)) return finish(404, 'Not found');
