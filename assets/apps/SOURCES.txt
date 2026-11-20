@@ -1,0 +1,24 @@
+App icons for the StarPie website showcase
+
+The PNGs were exported from locally installed Windows application icon
+resources. They were trimmed to their alpha bounds, scaled proportionally
+and centered on a 96 x 96 transparent canvas.
+
+edge.png                 Microsoft Edge / msedge.exe - IDR_MAINFRAME
+word.png                 Microsoft Office shortcut / wordicon.exe - 200
+excel.png                Microsoft Office shortcut / xlicons.exe - 257
+powerpoint.png           Microsoft Office shortcut / pptico.exe - 1300
+wechat.png               WeChat / Weixin.exe - IDI_ICON1
+wps.png                  WPS Office / ksolaunch.exe - IDI_00APPLICATION
+photoshop.png            Adobe Photoshop 2024 / Photoshop.exe - 1000
+premiere.png             Adobe Premiere Pro 2024 / Adobe Premiere Pro.exe - 1000
+jianying.png             Jianying Pro / JianyingPro.exe - 128
+acrobat.png              Adobe Acrobat / Acrobat.exe - 1
+pixpin.png               PixPin / PixPin.exe - IDI_ICON1
+paint.png                Microsoft Paint package / PaintAppList.targetsize-256_altform-unplated.png
+vscode.png               Visual Studio Code / Code.exe - 1
+git-bash.png             Git for Windows shortcut / git-for-windows.ico
+windows-terminal.png     Windows Terminal package / Square44x44Logo.targetsize-256_altform-unplated.png
+chrome.png               Google Chrome / chrome.exe - IDR_MAINFRAME
+python.png               Python 3.11 / python.exe - 1
+powershell.png           Windows PowerShell / powershell.exe - MSH_MAIN

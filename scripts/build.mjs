@@ -61,7 +61,11 @@ export async function buildSite(sourceRoot = projectRoot) {
   }
   // Publish the same validated snapshot used by the page/SVG generator, including its stable order.
   await writeFile(path.join(sponsorOutput, 'data.json'), JSON.stringify(data, null, 2) + '\n');
-  const assets = (await readdir(path.join(output, 'assets'))).sort();
+  const assetRoot = path.join(output, 'assets');
+  const entries = await readdir(assetRoot, { recursive: true, withFileTypes: true });
+  const assets = entries.filter(entry => entry.isFile()).map(entry =>
+    path.relative(assetRoot, path.join(entry.parentPath ?? entry.path, entry.name)).split(path.sep).join('/')
+  ).sort();
   const files = mainFiles.concat(assets.map(name => 'assets/' + name), sponsorFiles.concat('data.json').map(name => 'sponsor/' + name));
   await writeFile(path.join(output, 'build-info.json'), JSON.stringify({ files }, null, 2) + '\n');
   return { output, files };

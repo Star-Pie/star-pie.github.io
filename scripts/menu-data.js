@@ -1,201 +1,26 @@
+function app(id, name, chineseName = name) {
+  return { id, image: './assets/apps/' + id + '.png', label: { en: name, 'zh-CN': chineseName } };
+}
+
+function action(id, icon, chineseName, name) {
+  return { id, icon, label: { en: name, 'zh-CN': chineseName } };
+}
+
 export const presets = {
-  "everyday": [
-    {
-      "id": "files",
-      "icon": "folder",
-      "label": {
-        "zh-CN": "文件",
-        "en": "Files"
-      }
-    },
-    {
-      "id": "apps",
-      "icon": "app",
-      "label": {
-        "zh-CN": "应用",
-        "en": "Apps"
-      }
-    },
-    {
-      "id": "capture",
-      "icon": "camera",
-      "label": {
-        "zh-CN": "截图",
-        "en": "Capture"
-      }
-    },
-    {
-      "id": "windows",
-      "icon": "monitor",
-      "label": {
-        "zh-CN": "窗口",
-        "en": "Windows"
-      }
-    },
-    {
-      "id": "search",
-      "icon": "search",
-      "label": {
-        "zh-CN": "搜索",
-        "en": "Search"
-      }
-    },
-    {
-      "id": "copy",
-      "icon": "copy",
-      "label": {
-        "zh-CN": "复制",
-        "en": "Copy"
-      }
-    },
-    {
-      "id": "browser",
-      "icon": "globe",
-      "label": {
-        "zh-CN": "浏览器",
-        "en": "Browser"
-      }
-    },
-    {
-      "id": "music",
-      "icon": "music",
-      "label": {
-        "zh-CN": "音乐",
-        "en": "Music"
-      }
-    }
+  everyday: [
+    app('word', 'Word'), app('excel', 'Excel'), app('powerpoint', 'PowerPoint'),
+    action('capture', 'camera', '截图', 'Capture'), app('wechat', 'WeChat', '微信'),
+    app('wps', 'WPS'), app('edge', 'Edge'), action('copy', 'copy', '复制', 'Copy')
   ],
-  "creative": [
-    {
-      "id": "assets",
-      "icon": "folder",
-      "label": {
-        "zh-CN": "素材",
-        "en": "Assets"
-      }
-    },
-    {
-      "id": "brush",
-      "icon": "pen",
-      "label": {
-        "zh-CN": "画笔",
-        "en": "Brush"
-      }
-    },
-    {
-      "id": "capture",
-      "icon": "camera",
-      "label": {
-        "zh-CN": "截图",
-        "en": "Capture"
-      }
-    },
-    {
-      "id": "layers",
-      "icon": "layers",
-      "label": {
-        "zh-CN": "图层",
-        "en": "Layers"
-      }
-    },
-    {
-      "id": "search",
-      "icon": "search",
-      "label": {
-        "zh-CN": "搜索",
-        "en": "Search"
-      }
-    },
-    {
-      "id": "duplicate",
-      "icon": "copy",
-      "label": {
-        "zh-CN": "复制",
-        "en": "Duplicate"
-      }
-    },
-    {
-      "id": "reference",
-      "icon": "globe",
-      "label": {
-        "zh-CN": "参考",
-        "en": "References"
-      }
-    },
-    {
-      "id": "music",
-      "icon": "music",
-      "label": {
-        "zh-CN": "音乐",
-        "en": "Music"
-      }
-    }
+  creative: [
+    app('photoshop', 'Photoshop'), app('premiere', 'Premiere'), app('jianying', 'Jianying', '剪映'),
+    action('capture', 'camera', '截图', 'Capture'), app('pixpin', 'PixPin'),
+    app('paint', 'Paint', '画图'), app('acrobat', 'Acrobat'), action('assets', 'folder', '素材库', 'Assets')
   ],
-  "developer": [
-    {
-      "id": "project",
-      "icon": "folder",
-      "label": {
-        "zh-CN": "项目",
-        "en": "Project"
-      }
-    },
-    {
-      "id": "editor",
-      "icon": "code",
-      "label": {
-        "zh-CN": "编辑器",
-        "en": "Editor"
-      }
-    },
-    {
-      "id": "terminal",
-      "icon": "terminal",
-      "label": {
-        "zh-CN": "终端",
-        "en": "Terminal"
-      }
-    },
-    {
-      "id": "windows",
-      "icon": "monitor",
-      "label": {
-        "zh-CN": "窗口",
-        "en": "Windows"
-      }
-    },
-    {
-      "id": "search",
-      "icon": "search",
-      "label": {
-        "zh-CN": "搜索",
-        "en": "Search"
-      }
-    },
-    {
-      "id": "docs",
-      "icon": "book",
-      "label": {
-        "zh-CN": "文档",
-        "en": "Docs"
-      }
-    },
-    {
-      "id": "browser",
-      "icon": "globe",
-      "label": {
-        "zh-CN": "浏览器",
-        "en": "Browser"
-      }
-    },
-    {
-      "id": "settings",
-      "icon": "settings",
-      "label": {
-        "zh-CN": "设置",
-        "en": "Settings"
-      }
-    }
+  developer: [
+    app('vscode', 'VS Code'), app('git-bash', 'Git Bash'), app('windows-terminal', 'Terminal', '终端'),
+    action('project', 'folder', '项目', 'Project'), app('python', 'Python'),
+    app('powershell', 'PowerShell'), app('chrome', 'Chrome'), action('search', 'search', '查找', 'Find')
   ]
 };
 

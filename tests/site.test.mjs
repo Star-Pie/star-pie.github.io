@@ -48,13 +48,21 @@ test('External tabs isolate their opener and use HTTPS', () => {
     assert.match(match[0], /href="https:\/\//);
   }
 });
-test('Three presets contain eight localized actions with valid unique icons', () => {
+test('Every preset contains six local application PNGs and two localized functional symbols', async () => {
   assert.equal(Object.keys(presets).length, 3);
   for (const items of Object.values(presets)) {
     assert.equal(items.length, 8);
     assert.equal(new Set(items.map(item => item.id)).size, items.length);
+    assert.equal(items.filter(item => item.image).length, 6);
     for (const item of items) {
-      assert.ok(ids.includes('i-' + item.icon), item.icon);
+      if (item.image) {
+        assert.equal(item.image, './assets/apps/' + item.id + '.png');
+        assert.equal(item.icon, undefined);
+        const png = await readFile(path.join(root, item.image));
+        assert.equal(png.subarray(1, 4).toString(), 'PNG');
+      } else {
+        assert.ok(ids.includes('i-' + item.icon), item.icon);
+      }
       assert.ok(item.label.en && item.label['zh-CN']);
     }
   }
@@ -70,10 +78,15 @@ test('Radial geometry is finite and each sector has a distinct path', () => {
   assert.throws(() => sectorPath(0, 0), RangeError);
   assert.throws(() => sectorPath(0, 8, 100, 123), RangeError);
 });
-test('Download links use stable releases and beta features stay labeled', () => {
-  assert.equal((html.match(/href="https:\/\/github.com\/Star-Pie\/StarPie\/releases\/latest"/g) || []).length, 3);
-  assert.match(translations['zh-CN']['appearance.studioCaption'], /Beta/);
-  assert.match(translations.en['plugins.description'], /Beta/);
+test('Each download card points at its own v2.0.0 release asset, with matching stable feature guidance', () => {
+  for (const [type, asset] of [['setup', 'Setup-win-x64.exe'], ['portable', 'Standalone-win-x64.zip'], ['light', 'Lightweight-win-x64.zip']]) {
+    const card = html.match(new RegExp('<h3 data-i18n="download\\.' + type + '">([^]*?)</article>'));
+    assert.ok(card, type);
+    assert.ok(card[1].includes('href="https://github.com/Star-Pie/StarPie/releases/download/v2.0.0/StarPie-v2.0.0-' + asset + '"'));
+  }
+  for (const dictionary of Object.values(translations)) {
+    for (const key of ['appearance.studioCaption', 'plugins.description', 'faq.a3']) assert.doesNotMatch(dictionary[key], /beta|pre-release/i);
+  }
   assert.match(translations.en['demo.disclaimer'], /No actions/);
 });
 test('Preview server serves the site and denies private or executable files', async t => {
@@ -81,7 +94,7 @@ test('Preview server serves the site and denies private or executable files', as
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
   const base = 'http://127.0.0.1:' + server.address().port;
-  for (const file of ['/', '/styles/main.css', '/scripts/app.js', '/assets/logo.webp']) {
+  for (const file of ['/', '/styles/main.css', '/scripts/app.js', '/assets/logo.webp', '/assets/apps/word.png', '/assets/calculator-demo.webm']) {
     const result = await fetch(base + file);
     assert.equal(result.status, 200, file);
     await result.arrayBuffer();
@@ -119,13 +132,10 @@ test('First-paint preferences survive blocked storage and reject unknown values'
 });
 
 
-test('GitHub support appears only once, below the hero download actions', () => {
-  const actions = html.indexOf('class="hero-actions"');
-  const support = html.indexOf('class="hero-support"');
-  const metadata = html.indexOf('class="hero-meta"');
-  assert.ok(actions < support && support < metadata);
+test('GitHub support has one link in the support section', () => {
+  const support = html.slice(html.indexOf('class="support-section"'), html.indexOf('class="faq-section'));
+  assert.match(support, /href="https:\/\/github.com\/Star-Pie\/StarPie"[^>]*>.*?data-i18n="community.action"/);
   assert.equal((html.match(/data-i18n="community.action"/g) || []).length, 1);
-  assert.doesNotMatch(html, /class="community-section/);
 });
 test('Download icons and titles share explicit alignment containers', () => {
   const headings = [...html.matchAll(/<div class="download-option-heading">([\s\S]*?)<\/div>/g)];

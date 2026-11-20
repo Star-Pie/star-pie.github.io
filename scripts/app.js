@@ -5,9 +5,6 @@ const root = document.documentElement;
 let language = root.dataset.language === 'en' ? 'en' : 'zh-CN';
 let preset = 'everyday';
 let selectedIndex = null;
-let previewMode = 'studio';
-let isPlaying = false;
-let mediaFailed = false;
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const t = (key, values) => translate(key, language, values);
@@ -15,8 +12,6 @@ const svgNS = 'http://www.w3.org/2000/svg';
 const wheel = $('#radial-menu');
 const sectors = $('#wheel-sectors');
 const result = $('#demo-result');
-const gestureImage = $('#gesture-image');
-const playButton = $('#play-demo');
 const nav = $('#main-nav');
 const menuButton = $('#menu-toggle');
 
@@ -35,13 +30,13 @@ function updateResult(index = selectedIndex, preview = false) {
   text.textContent = index === null ? t('demo.hint') : t(preview ? 'demo.preview' : 'demo.selected', {
     action: presets[preset][index].label[language]
   });
+  [...sectors.children].forEach((sector, i) => sector.classList.toggle('is-highlighted', i === index));
   result.classList.toggle('has-result', index !== null && !preview);
 }
 
 function selectAction(index) {
   selectedIndex = index;
   [...sectors.children].forEach((sector, i) => {
-    sector.classList.toggle('is-selected', i === index);
     sector.setAttribute('aria-pressed', String(i === index));
   });
   updateResult();
@@ -55,13 +50,18 @@ function renderWheel() {
       class: 'wheel-sector', role: 'button', tabindex: index === 0 ? '0' : '-1',
       'aria-label': t('demo.action', { action: item.label[language] }), 'aria-pressed': 'false'
     });
-    const fill = index === 1 ? 'violet' : index >= 2 && index <= 4 ? 'indigo' : 'blue';
-    group.append(svgElement('path', { class: 'sector-shape', d: sectorPath(index), fill: 'url(#sector-' + fill + ')' }));
+    group.append(svgElement('path', { class: 'sector-shape', d: sectorPath(index), fill: 'url(#sector-rest)' }));
     const [x, y] = polar(184, -90 + index * 45);
-    const icon = svgElement('svg', { class: 'icon sector-icon', x: x - 12.5, y: y - 21, width: 25, height: 25, 'aria-hidden': 'true' });
-    icon.append(svgElement('use', { href: '#i-' + item.icon }));
-    group.append(icon);
-    const label = svgElement('text', { class: 'sector-label', x, y: y + 25, 'aria-hidden': 'true' });
+    if (item.image) {
+      group.append(svgElement('image', {
+        href: item.image, class: 'app-icon', x: x - 27, y: y - 34, width: 54, height: 54, 'aria-hidden': 'true'
+      }));
+    } else {
+      const icon = svgElement('svg', { class: 'icon sector-icon', x: x - 16, y: y - 22, width: 32, height: 32, 'aria-hidden': 'true' });
+      icon.append(svgElement('use', { href: '#i-' + item.icon }));
+      group.append(icon);
+    }
+    const label = svgElement('text', { class: 'sector-label', x, y: y + 40, 'aria-hidden': 'true' });
     label.textContent = item.label[language];
     group.append(label);
     group.addEventListener('click', () => selectAction(index));
@@ -107,56 +107,6 @@ function setMenu(open) {
   updateMenuButton();
 }
 
-function updateAppearance() {
-  const image = $('#appearance-image');
-  const studio = previewMode === 'studio';
-  const src = studio ? './assets/theme-studio.webp' : './assets/themes.webp';
-  if (image.getAttribute('src') !== src) image.src = src;
-  image.alt = t(studio ? 'appearance.studioAlt' : 'appearance.stylesAlt');
-  image.dataset.i18nAlt = studio ? 'appearance.studioAlt' : 'appearance.stylesAlt';
-  const caption = $('#appearance-caption');
-  caption.dataset.i18n = studio ? 'appearance.studioCaption' : 'appearance.stylesCaption';
-  caption.textContent = t(caption.dataset.i18n);
-}
-
-function updatePlaybackButton() {
-  playButton.setAttribute('aria-pressed', String(isPlaying));
-  playButton.classList.toggle('is-playing', isPlaying);
-  playButton.querySelector('use').setAttribute('href', isPlaying ? '#i-pause' : '#i-play');
-  playButton.querySelector('span').textContent = t(playButton.disabled ? 'fast.loading' : isPlaying ? 'fast.pause' : 'fast.play');
-  playButton.querySelector('span').dataset.i18n = isPlaying ? 'fast.pause' : 'fast.play';
-  const caption = gestureImage.closest('figure').querySelector('figcaption');
-  caption.dataset.i18n = mediaFailed ? 'fast.failed' : 'fast.caption';
-  caption.textContent = t(caption.dataset.i18n);
-}
-
-function setPlaying(playing) {
-  isPlaying = playing;
-  mediaFailed = false;
-  playButton.disabled = playing;
-  playButton.setAttribute('aria-busy', String(playing));
-  gestureImage.src = playing ? './assets/gesture-demo.gif' : './assets/gesture-poster.webp';
-  updatePlaybackButton();
-}
-
-gestureImage.addEventListener('load', () => {
-  playButton.disabled = false;
-  playButton.removeAttribute('aria-busy');
-  updatePlaybackButton();
-});
-gestureImage.addEventListener('error', () => {
-  if (isPlaying) {
-    setPlaying(false);
-    mediaFailed = true;
-    updatePlaybackButton();
-  }
-});
-playButton.addEventListener('click', () => setPlaying(!isPlaying));
-document.addEventListener('visibilitychange', () => { if (document.hidden && isPlaying) setPlaying(false); });
-window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', event => {
-  if (event.matches && isPlaying) setPlaying(false);
-});
-
 function applyLanguage() {
   root.lang = language;
   root.dataset.language = language;
@@ -172,8 +122,6 @@ function applyLanguage() {
   $$('.brand[aria-label]').forEach(node => node.setAttribute('aria-label', language === 'en' ? 'StarPie home' : 'StarPie 首页'));
   updateThemeButton();
   updateMenuButton();
-  updateAppearance();
-  updatePlaybackButton();
   renderWheel();
 }
 
@@ -199,16 +147,76 @@ $$('[data-preset]').forEach(button => {
     renderWheel();
   });
 });
-$$('[data-preview]').forEach(button => {
+const gallery = $('.wheel-looks');
+for (const button of $$('[data-look]')) {
   button.addEventListener('click', () => {
-    previewMode = button.dataset.preview;
-    $$('[data-preview]').forEach(node => {
-      const active = node === button;
-      node.classList.toggle('is-active', active);
-      node.setAttribute('aria-pressed', String(active));
-    });
-    updateAppearance();
+    gallery.dataset.active = button.dataset.look;
+    for (const choice of $$('[data-look]')) {
+      choice.setAttribute('aria-pressed', String(choice === button));
+    }
   });
+}
+const video = $('#gesture-video');
+const player = video.closest('.demo-player');
+const transport = player.querySelector('.demo-transport');
+const play = transport.querySelector('.demo-play');
+const seek = transport.querySelector('.demo-seek');
+const fullscreen = transport.querySelector('.demo-fullscreen');
+
+function setControlLabel(node, key) {
+  node.dataset.i18n = key;
+  node.textContent = t(key);
+}
+
+function syncPlayback() {
+  const key = video.ended ? 'fast.replay' : video.paused ? 'fast.play' : 'fast.pause';
+  setControlLabel(play.querySelector('span'), key);
+  play.querySelector('use').setAttribute('href', video.paused || video.ended ? '#i-play' : '#i-pause');
+  seek.disabled = !Number.isFinite(video.duration) || video.duration <= 0;
+  if (!seek.disabled) {
+    seek.max = video.duration;
+    seek.value = video.currentTime;
+  }
+}
+
+async function togglePlayback() {
+  if (!video.paused && !video.ended) {
+    video.pause();
+    return;
+  }
+  try {
+    await video.play();
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      video.controls = true;
+      transport.hidden = true;
+    }
+  }
+}
+
+play.addEventListener('click', togglePlayback);
+video.addEventListener('click', () => { if (!video.controls) togglePlayback(); });
+for (const event of ['play', 'pause', 'ended', 'durationchange', 'loadedmetadata', 'timeupdate']) {
+  video.addEventListener(event, syncPlayback);
+}
+seek.addEventListener('input', () => { video.currentTime = seek.valueAsNumber; });
+if (document.fullscreenEnabled) {
+  fullscreen.hidden = false;
+  fullscreen.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement === player) await document.exitFullscreen();
+      else await player.requestFullscreen();
+    } catch { /* Embedding pages can restrict fullscreen. Inline playback remains available. */ }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    setControlLabel(fullscreen, document.fullscreenElement === player ? 'fast.exitFullscreen' : 'fast.fullscreen');
+  });
+}
+syncPlayback();
+video.controls = false;
+transport.hidden = false;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) video.pause();
 });
 menuButton.addEventListener('click', () => setMenu(menuButton.getAttribute('aria-expanded') !== 'true'));
 nav.addEventListener('click', event => { if (event.target.closest('a')) setMenu(false); });
